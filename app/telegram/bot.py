@@ -66,10 +66,7 @@ class BotManager:
     async def connect(self) -> None:
         """Authenticate and start the Bot using BOT_TOKEN with automatic self-healing on IP conflict."""
         try:
-            await self.client.connect()
-            if not await self.client.is_user_authorized():
-                logger.info("Bot authorization not found in session; signing in via BOT_TOKEN...")
-                await self.client.sign_in(bot_token=self.config.bot_token)
+            await self._perform_connect()
         except (AuthKeyDuplicatedError, SecurityError, Exception) as e:
             err_msg = str(e).lower()
             if (
@@ -103,11 +100,15 @@ class BotManager:
                     connection_retries=5,
                     retry_delay=2,
                 )
-                await self.client.connect()
-                logger.info("Signing in Bot with clean fresh session via BOT_TOKEN...")
-                await self.client.sign_in(bot_token=self.config.bot_token)
+                await self._perform_connect(force_sign_in=True)
             else:
                 raise e
+
+    async def _perform_connect(self, force_sign_in: bool = False) -> None:
+        await self.client.connect()
+        if force_sign_in or not await self.client.is_user_authorized():
+            logger.info("Bot authorization not found in session; signing in via BOT_TOKEN...")
+            await self.client.sign_in(bot_token=self.config.bot_token)
 
         # Persist session string to avoid ImportBotAuthorizationRequest flood waits on restarts
         try:
