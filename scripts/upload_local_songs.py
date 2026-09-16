@@ -277,14 +277,14 @@ async def main() -> None:
     parser.add_argument(
         "--workers",
         type=int,
-        default=4,
-        help="Number of concurrent upload worker pipelines (default: 4, recommended: 4-6)",
+        default=8,
+        help="Number of concurrent upload worker pipelines (default: 8 for maximum speed)",
     )
     parser.add_argument(
         "--delay",
         type=float,
-        default=0.8,
-        help="Delay in seconds between songs (default: 0.8s)",
+        default=0.3,
+        help="Delay in seconds between songs (default: 0.3s)",
     )
     parser.add_argument(
         "--tag",
@@ -292,6 +292,17 @@ async def main() -> None:
         nargs="*",
         default=[],
         help="Additional custom tags to attach (e.g. --tag favorite telugu)",
+    )
+    parser.add_argument(
+        "--recursive",
+        action="store_true",
+        default=True,
+        help="Recursively scan subfolders for audio files (default: True)",
+    )
+    parser.add_argument(
+        "--as-bot",
+        action="store_true",
+        help="Force uploading via Bot client (@heysanthu_music_bot) to avoid multi-IP user session collisions",
     )
     parser.add_argument(
         "--dry-run",
@@ -310,19 +321,27 @@ async def main() -> None:
     api_id = os.getenv("API_ID")
     api_hash = os.getenv("API_HASH")
     session_str = os.getenv("TELEGRAM_SESSION")
+    bot_session = os.getenv("BOT_SESSION")
+    bot_token = os.getenv("BOT_TOKEN")
     raw_channel_id = os.getenv("CHANNEL_ID")
 
-    if not all([api_id, api_hash, session_str, raw_channel_id]):
-        print("[ERROR] Missing required credentials in .env file.")
+    if not all([api_id, api_hash, raw_channel_id]):
+        print("[ERROR] Missing required credentials (API_ID, API_HASH, CHANNEL_ID) in .env file.")
         sys.exit(1)
 
     channel_id = int(raw_channel_id)
     history = load_history()
 
-    all_files = [
-        f for f in music_dir.iterdir()
-        if f.is_file() and f.suffix.lower() in SUPPORTED_AUDIO_EXTENSIONS
-    ]
+    if args.recursive:
+        all_files = [
+            f for f in music_dir.rglob("*")
+            if f.is_file() and f.suffix.lower() in SUPPORTED_AUDIO_EXTENSIONS
+        ]
+    else:
+        all_files = [
+            f for f in music_dir.iterdir()
+            if f.is_file() and f.suffix.lower() in SUPPORTED_AUDIO_EXTENSIONS
+        ]
     all_files.sort(key=lambda x: x.name.lower())
 
     pending_files = [f for f in all_files if f.name not in history]
@@ -330,11 +349,11 @@ async def main() -> None:
     print("=" * 60)
     print("TPMC — High-Speed Parallel Music Cloud Uploader ⚡")
     print("=" * 60)
-    print(f"Folder:         {music_dir}")
+    print(f"Folder:         {music_dir} (recursive: {args.recursive})")
     print(f"Total files:    {len(all_files)}")
     print(f"Already synced: {len(all_files) - len(pending_files)}")
     print(f"Pending upload: {len(pending_files)}")
-    print(f"Workers:        {args.workers} concurrent chunk streams")
+    print(f"Workers:        {args.workers} concurrent chunk streams (512 KB pipelining)")
     print("=" * 60)
 
     if not pending_files:
@@ -354,22 +373,51 @@ async def main() -> None:
             print(f"    Caption:\n{caption}\n")
         return
 
-    client = TelegramClient(
-        StringSession(session_str),
-        int(api_id),
-        api_hash,
-        connection_retries=10,
-        retry_delay=2,
-    )
-    await client.connect()
+    # Select client: User session if valid, or automatic Bot session fallback
+    client = None
+    if not args.as_bot and session_str:
+        test_client = TelegramClient(
+            StringSession(session_str),
+            int(api_id),
+            api_hash,
+            connection_retries=3,
+            retry_delay=1,
+        )
+        try:
+            await test_client.connect()
+            if await test_client.is_user_authorized():
+                client = test_client
+                me = await client.get_me()
+                print(f"[CONNECTED] Authorized via User Account: {me.first_name} [ID: {me.id}]")
+            else:
+                await test_client.disconnect()
+        except Exception as e:
+            print(f"[NOTE] User session not available locally ({e}). Switching to Bot uploader...")
+            try:
+                await test_client.disconnect()
+            except Exception:
+                pass
 
-    if not await client.is_user_authorized():
-        print("[ERROR] Telegram session authorization failed.")
-        await client.disconnect()
-        return
+    if client is None:
+        bot_sess = bot_session or None
+        client = TelegramClient(
+            StringSession(bot_sess),
+            int(api_id),
+            api_hash,
+            connection_retries=10,
+            retry_delay=2,
+        )
+        await client.connect()
+        if not await client.is_user_authorized():
+            if not bot_token:
+                print("[ERROR] Neither valid TELEGRAM_SESSION nor BOT_TOKEN found.")
+                sys.exit(1)
+            await client.sign_in(bot_token=bot_token)
+        me = await client.get_me()
+        print(f"[CONNECTED] Authorized via Bot Account: @{me.username} [ID: {me.id}]")
 
     channel = await client.get_entity(channel_id)
-    print(f"[CONNECTED] Uploading to channel: '{channel.title}' ({channel_id})\n")
+    print(f"[TARGET] Storage channel: '{channel.title}' ({channel_id})\n")
 
     uploaded_count = 0
     failed_count = 0
