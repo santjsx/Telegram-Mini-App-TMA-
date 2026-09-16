@@ -105,3 +105,62 @@ async def test_bot_flood_wait_fault_tolerance():
         await client.close()
         await conn_mgr.disconnect_all()
 
+
+@pytest.mark.asyncio
+async def test_user_auth_failed_fault_tolerance():
+    from unittest.mock import AsyncMock, MagicMock
+    from telethon.errors import AuthKeyDuplicatedError
+    from app.telegram.connection import TelegramConnectionManager, ConnectionState
+    from app.config import Config
+
+    cfg = Config(
+        api_id=12345,
+        api_hash="hash",
+        bot_token="token",
+        channel_id=-1001,
+        telegram_session="session",
+        authorized_user_id=12345,
+    )
+
+    conn_mgr = TelegramConnectionManager(cfg)
+
+    # Mock Bot that connects normally
+    mock_bot = MagicMock()
+    mock_bot.connect = AsyncMock()
+    mock_bot.disconnect = AsyncMock()
+
+    # Mock User client that raises AuthKeyDuplicatedError (multi-IP collision)
+    mock_user = MagicMock()
+    dup_err = AuthKeyDuplicatedError(request=None)
+    mock_user.connect = AsyncMock(side_effect=dup_err)
+    mock_user.disconnect = AsyncMock()
+
+    # connect_all must complete gracefully without raising
+    await conn_mgr.connect_all(mock_bot, mock_user)
+
+    assert conn_mgr.bot_state == ConnectionState.CONNECTED
+    assert conn_mgr.user_state == ConnectionState.AUTH_FAILED
+    assert conn_mgr.user_error is not None
+
+    summary = conn_mgr.get_status_summary()
+    assert summary["bot"] == "connected"
+    assert "auth_failed" in summary["user"]
+    assert summary["overall"] == "degraded"
+
+    # Health server MUST return HTTP 200 OK (Render health checks will succeed!)
+    server = HealthServer(status_provider=lambda: summary)
+    test_server = TestServer(server.app)
+    client = TestClient(test_server)
+    await client.start_server()
+
+    try:
+        resp = await client.get("/health")
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["overall"] == "degraded"
+        assert "auth_failed" in data["user"]
+    finally:
+        await client.close()
+        await conn_mgr.disconnect_all()
+
+

@@ -38,6 +38,7 @@ class TelegramConnectionManager:
         self.bot_manager: Optional[BotManager] = None
         self.user_manager: Optional[UserClientManager] = None
         self._bot_retry_task: Optional[asyncio.Task] = None
+        self.user_error: Optional[str] = None
         self._lock = asyncio.Lock()
 
     @property
@@ -51,9 +52,17 @@ class TelegramConnectionManager:
         bot_desc = self.bot_state.value.lower()
         if self.bot_state == ConnectionState.RECONNECTING and self.bot_wait_seconds > 0:
             bot_desc = f"reconnecting (wait {self.bot_wait_seconds}s)"
+        user_desc = self.user_state.value.lower()
+        if self.user_state == ConnectionState.AUTH_FAILED and self.user_error:
+            short_err = (
+                self.user_error[:50] + "..."
+                if len(self.user_error) > 50
+                else self.user_error
+            )
+            user_desc = f"auth_failed: {short_err}"
         return {
             "bot": bot_desc,
-            "user": self.user_state.value.lower(),
+            "user": user_desc,
             "overall": "connected" if self.is_connected else "degraded",
         }
 
@@ -126,11 +135,16 @@ class TelegramConnectionManager:
                 logger.info("Connecting Telegram User MTProto client...")
                 await self.user_manager.connect()
                 self.user_state = ConnectionState.CONNECTED
+                self.user_error = None
                 logger.info("Telegram User client connected successfully.")
             except Exception as e:
-                logger.error(f"FATAL: User session authentication failed: {e}")
                 self.user_state = ConnectionState.AUTH_FAILED
-                raise
+                self.user_error = str(e)
+                logger.error(
+                    f"⚠️ User MTProto session authentication failed: {e}\n"
+                    f"The WebApp & Health Server remain 100% ONLINE (HTTP 200). "
+                    f"Please generate a fresh TELEGRAM_SESSION and update it in Render."
+                )
 
     async def disconnect_all(self) -> None:
         async with self._lock:

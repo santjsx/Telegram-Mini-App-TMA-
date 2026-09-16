@@ -99,7 +99,7 @@ class TPMCApp:
     def _get_health_status(self) -> dict:
         conn = self.connection_manager.get_status_summary()
         stats = self.indexer.get_stats()
-        return {
+        status_payload = {
             "status": "ok" if self.connection_manager.is_connected else "degraded",
             "telegram": conn.get("user", "unknown"),
             "bot": conn.get("bot", "unknown"),
@@ -108,6 +108,9 @@ class TPMCApp:
             "users": len(self.access_manager.get_all_approved()) + 1,
             "pending_requests": len(self.access_manager.get_all_pending()),
         }
+        if self.connection_manager.user_error:
+            status_payload["user_error"] = self.connection_manager.user_error
+        return status_payload
 
     async def start(self) -> None:
         logger.info("=" * 60)
@@ -117,24 +120,26 @@ class TPMCApp:
         # 1. Start HTTP Health Server first (for Render health checks)
         await self.health_server.start()
 
-        # 2. Connect Telegram clients
-        try:
-            await self.connection_manager.connect_all(
-                bot_manager=self.bot_manager,
-                user_manager=self.user_manager,
-            )
-        except Exception as e:
-            logger.critical(f"Failed to authenticate Telegram clients: {e}. Exiting.")
-            await self.shutdown()
-            sys.exit(1)
+        # 2. Connect Telegram clients (fault-tolerant: never crashes the web server)
+        await self.connection_manager.connect_all(
+            bot_manager=self.bot_manager,
+            user_manager=self.user_manager,
+        )
 
-        # 3. Validate channel access
-        try:
-            await self.user_manager.validate_channel()
-        except Exception as e:
-            logger.critical(f"Failed to validate storage channel: {e}. Exiting.")
-            await self.shutdown()
-            sys.exit(1)
+        from app.telegram.connection import ConnectionState
+
+        # 3. Validate channel access (only if user client is connected)
+        if self.connection_manager.user_state == ConnectionState.CONNECTED:
+            try:
+                await self.user_manager.validate_channel()
+            except Exception as e:
+                logger.error(f"Failed to validate storage channel: {e}. WebApp remains online.")
+        else:
+            logger.warning(
+                "Telegram User client is not connected (%s). "
+                "Channel validation and library indexing will begin once a valid TELEGRAM_SESSION is provided.",
+                self.connection_manager.user_state.value,
+            )
 
         # 4. Attach command & callback routers + real-time channel post indexer
         async def handle_new_channel_post(message: Message) -> None:
@@ -150,13 +155,20 @@ class TPMCApp:
             unauthorized_handler=self.admin_handler.handle_unauthorized_message,
         )
 
-        # 5. Start non-blocking background indexing (Fast Boot)
-        logger.info("Launching background library indexing...")
-        await self.indexer.start_indexing(
-            user_client=self.user_manager,
-            channel_id=self.config.channel_id,
-            reset=False,
-        )
+        # 5. Start non-blocking background indexing (Fast Boot) if user client is connected
+        if self.connection_manager.user_state == ConnectionState.CONNECTED:
+            logger.info("Launching background library indexing...")
+            await self.indexer.start_indexing(
+                user_client=self.user_manager,
+                channel_id=self.config.channel_id,
+                reset=False,
+            )
+        else:
+            logger.info(
+                "Health & WebApp server is running at http://%s:%s",
+                self.config.host,
+                self.config.port,
+            )
 
         logger.info("TPMC is fully initialized and operational!")
 
