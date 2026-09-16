@@ -73,6 +73,9 @@ class BotManager:
                 isinstance(e, (AuthKeyDuplicatedError, SecurityError))
                 or "two different ip addresses" in err_msg
                 or "session file) was used" in err_msg
+                or "authkeyduplicated" in err_msg
+                or "authorization key" in err_msg
+                or "auth_key" in err_msg
             ):
                 logger.warning(
                     f"⚠️ Bot session authorization key invalidated by Telegram (two different IP addresses conflict): {e}. "
@@ -90,7 +93,11 @@ class BotManager:
                     except Exception:
                         pass
 
-                self.config.bot_session = None
+                try:
+                    self.config.bot_session = None
+                except Exception:
+                    pass
+
                 self.session = StringSession(None)
                 self.client = TelegramClient(
                     self.session,

@@ -86,9 +86,11 @@ class TelegramConnectionManager:
                 self.bot_wait_seconds = wait
                 logger.warning(f"Bot still under flood wait: {wait}s remaining.")
             except Exception as e:
-                logger.warning(f"Background bot connection retry failed: {e}. Will retry in 60s.")
-                wait = 60
-                self.bot_wait_seconds = 60
+                err_str = str(e).lower()
+                retry_wait = 5 if ("two different ip addresses" in err_str or "authkey" in err_str or "authorization key" in err_str) else 15
+                logger.warning(f"Background bot connection retry failed: {e}. Will retry in {retry_wait}s.")
+                wait = retry_wait
+                self.bot_wait_seconds = retry_wait
 
     async def connect_all(
         self, bot_manager: BotManager, user_manager: UserClientManager

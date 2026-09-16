@@ -24,7 +24,7 @@ FORBIDDEN_PLACEHOLDERS = {
 }
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class Config:
     api_id: int
     api_hash: str
