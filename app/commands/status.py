@@ -134,11 +134,13 @@ class StatusCommandHandler:
                 await event.answer("No tracks in library yet.", alert=True)
                 return
             await event.answer(f"🎲 Picked: {track.display_title[:25]}!")
+            performer = track.performer or 'Unknown Artist'
+            album_str = f"💿 *{track.album}* · " if track.album else ""
+            meta_str = f"({track.duration_formatted} · {track.file_size_formatted})"
             text = (
                 f"🎲 **Surprise Track Pick:**\n\n"
-                f"**{track.title}**\n"
-                f"└ 👤 {track.performer or 'Unknown Artist'} • 💿 {track.album or 'Single'}\n"
-                f"└ ⏱ `{track.duration_formatted}` • 💾 `{track.file_size_formatted}`"
+                f"**{track.title}** — *{performer}*\n"
+                f"{album_str}{meta_str}"
             )
             buttons = [
                 [

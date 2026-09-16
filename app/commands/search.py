@@ -115,12 +115,28 @@ class SearchCommandHandler:
             await event.answer()
 
     def _format_page(self, result) -> tuple[str, list[list[Button]]]:
+        query_str = (result.query or "").strip()
+        q_lower = query_str.lower()
+        if q_lower.startswith("album:"):
+            album_name = query_str[6:].strip()
+            header = f"💿 **Album: {album_name}**"
+        elif q_lower.startswith("artist:"):
+            artist_name = query_str[7:].strip()
+            header = f"🎤 **Artist: {artist_name}**"
+        elif q_lower.startswith("genre:") or query_str.startswith("#"):
+            tag_name = query_str.split(":", 1)[-1].lstrip("#").strip()
+            header = f"🎸 **Genre: #{tag_name}**"
+        elif q_lower in ("favorite", "#favorite"):
+            header = "⭐ **Favorite Tracks**"
+        else:
+            header = f"🔍 **Search Results for:** `{query_str}`"
+
         if result.total_count == 1:
-            lines = [f"🎵 **Found 1 track for** `{result.query}`:\n"]
+            lines = [f"{header}\nFound **1** track:\n"]
         else:
             lines = [
-                f"🎵 **Search Results for:** `{result.query}`",
-                f"Found **{result.total_count}** tracks • Page **{result.page}** of **{result.total_pages}**\n",
+                header,
+                f"Found **{result.total_count}** tracks · Page **{result.page}** of **{result.total_pages}**\n",
             ]
 
         start_num = (result.page - 1) * result.page_size + 1
@@ -129,22 +145,25 @@ class SearchCommandHandler:
 
         for i, t in enumerate(result.tracks, start=start_num):
             fav = " ⭐" if t.is_favorite else ""
+            title = t.title or t.display_title
             performer = t.performer if t.performer and t.performer != "Unknown Artist" else ""
+
+            meta_parts = []
+            if t.duration_formatted:
+                meta_parts.append(t.duration_formatted)
+            if t.file_size_formatted:
+                meta_parts.append(t.file_size_formatted)
+            meta_str = f" ({' · '.join(meta_parts)})" if meta_parts else ""
+
             if performer:
-                lines.append(
-                    f"**{i}.** **{t.title}**{fav}\n"
-                    f"└ 👤 {performer} • ⏱ `{t.duration_formatted}` • 💾 `{t.file_size_formatted}`"
-                )
+                lines.append(f"**{i}.** **{title}**{fav} — *{performer}*{meta_str}")
             else:
-                lines.append(
-                    f"**{i}.** **{t.display_title}**{fav}\n"
-                    f"└ ⏱ `{t.duration_formatted}` • 💾 `{t.file_size_formatted}`"
-                )
+                lines.append(f"**{i}.** **{title}**{fav}{meta_str}")
 
             track_buttons.append(
                 Button.inline(f"📥 {i}", data=f"s:one:{t.message_id}".encode("utf-8"))
             )
-            if len(track_buttons) == 5:
+            if len(track_buttons) == 3:
                 track_rows.append(track_buttons)
                 track_buttons = []
 
@@ -161,6 +180,9 @@ class SearchCommandHandler:
                     f"📥 Send Audio ({only_track.file_size_formatted})",
                     data=f"s:one:{only_track.message_id}".encode("utf-8"),
                 )
+            ])
+            buttons.append([
+                Button.inline("📚 Back to Library", data=b"lib:overview")
             ])
             return "\n".join(lines), buttons
 
@@ -183,12 +205,14 @@ class SearchCommandHandler:
         if nav_row:
             buttons.append(nav_row)
 
-        # Download entire page button
-        buttons.append([
+        # Action row: Download All & Back to Library
+        action_row: list[Button] = [
             Button.inline(
-                f"📥 Download All on Page ({len(result.tracks)} tracks)",
+                f"📥 Download All ({len(result.tracks)} tracks)",
                 data=f"s:dl:{result.page}:{safe_query}".encode("utf-8"),
-            )
-        ])
+            ),
+            Button.inline("📚 Library", data=b"lib:overview"),
+        ]
+        buttons.append(action_row)
 
         return "\n".join(lines), buttons

@@ -1,0 +1,74 @@
+# ==============================================================================
+# .cursorrules - Strict "No-Breakage, No-Hallucination" Development Protocol
+# Project: Telegram Personal Music Cloud (TPMC) / Telegram Mini App (TMA)
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. CORE OPERATING PRINCIPLES
+# ------------------------------------------------------------------------------
+- NEVER hallucinate packages, APIs, parameters, or functions. If an import or method is not explicitly declared in `requirements.txt` or `package.json`, DO NOT USE IT without explicit user permission.
+- ZERO UNPROVOKED REFACTORING. Do not rewrite functions, change variable names, alter file formats, or redesign working architectures unless explicitly instructed.
+- SURGICAL EDITS ONLY. Never rewrite entire files. Always use localized, minimal diffs. Keep existing comments, docstrings, typing hints, and unchanged functions completely intact.
+- FORCED INVESTIGATION PHASE: Before making ANY code edit:
+  1. Inspect and read the exact target file and its callers.
+  2. Verify existing patterns, models, and type signatures.
+  3. Validate against hardware/runtime constraints (Render 512MB RAM, Telegram rate limits).
+  4. Formulate the minimal change needed before touching a single character.
+
+# ------------------------------------------------------------------------------
+# 2. ARCHITECTURAL & RUNTIME CONSTRAINTS (TPMC SPECIFIC)
+# ------------------------------------------------------------------------------
+- TELEGRAM IS THE ONLY SOURCE OF TRUTH:
+  * Media files exist ONLY in the private Telegram channel (`CHANNEL_ID`).
+  * Render filesystem is ephemeral. NEVER save audio tracks permanently to disk.
+  * Never allocate large buffers in memory. Streaming audio must use chunked streams (128KB chunks) and bounded LRU caches (max 16 headers, max 64 chunks).
+  * Always invoke `gc.collect()` after processing heavy byte buffers (e.g. mutagen artwork extraction).
+- DUAL TELEGRAM IDENTITY:
+  * Bot Client (`BOT_TOKEN`): Exclusively used for Telegram DM interactions, commands (`/start`, `/search`, `/download`), interactive buttons, and notifications.
+  * User MTProto Client (`TELEGRAM_SESSION`): Exclusively used for accessing the private storage channel, extracting audio metadata, and streaming audio via MTProto.
+  * NEVER cross client roles or pass bot tokens into user-client sessions.
+- MODE A FORWARDING:
+  * Commands requesting track delivery must forward media directly from the channel to the user's chat.
+  * NEVER download and re-upload audio for Telegram chat delivery.
+- TELEGRAM FLOODWAIT & RATE LIMITS:
+  * Never swallow or bypass `FloodWaitError` or `FloodWait`.
+  * Always capture flood wait seconds and sleep or propagate backoff cleanly.
+  * Use the centralized retry helpers (`app/jobs/retry.py`).
+- AUTHENTICATION & ACCESS CONTROL:
+  * Every command and API endpoint must check `AccessManager` authorization.
+  * WebApp endpoints must validate Telegram `initData` with HMAC-SHA256 or verify authorized user IDs.
+  * Secrets (`BOT_TOKEN`, `API_HASH`, `TELEGRAM_SESSION`, `API_ID`, `AUTHORIZED_USER_ID`) must NEVER be printed to logs. Use `app/logging_config.py`.
+
+# ------------------------------------------------------------------------------
+# 3. CODE MODIFICATION RULES & BOUNDARIES
+# ------------------------------------------------------------------------------
+- PYTHON BACKEND (`app/`):
+  * Language: Python 3.10+ (compatible with Python 3.14).
+  * Web Server: `aiohttp.web`. Routes live in `app/health/server.py`.
+  * Keep-alive ping loop runs in `app/main.py`. Do not remove or alter its timing without instructions.
+  * In-memory index is managed by `MusicIndexer` (`app/index/indexer.py`). Do not replace it with an external database unless requested.
+  * Never block the asyncio event loop. Any sync I/O must be dispatched via `asyncio.to_thread` or executor.
+- FRONTEND SPA (`frontend/`):
+  * Stack: React 19, TypeScript, Vite 6, Tailwind CSS 3.4, Lucide React.
+  * Build Output: Must output to `../webapp/dist` (configured in `frontend/vite.config.ts`).
+  * NEVER manually modify files inside `webapp/dist/`. Always edit source code in `frontend/src/` and run `npm run build` inside `frontend/`.
+  * Do not introduce third-party UI component libraries (e.g. MUI, Chakra, Radix) without approval. Maintain the custom Tailwind + Lucide design system.
+  * Telegram WebApp integration: Always safeguard `window.Telegram?.WebApp` with optional chaining and fallback for standard desktop browsers.
+  * Native back-button handling: Ensure `Telegram.WebApp.BackButton` is synced with open modal states.
+
+# ------------------------------------------------------------------------------
+# 4. VERIFICATION & TESTING PROTOCOL
+# ------------------------------------------------------------------------------
+- Before declaring any backend task complete, run pytest:
+  `pytest tests/ -v`
+- Before declaring any frontend task complete, run the TypeScript build check:
+  `npm --prefix frontend run build`
+- All tests in `tests/` must pass with 0 failures and 0 regressions.
+- If an existing test fails, investigate why before altering the test or the underlying implementation. Never delete or disable tests to make a build pass.
+
+# ------------------------------------------------------------------------------
+# 5. CODE OUTPUT FORMATTING
+# ------------------------------------------------------------------------------
+- Provide targeted diffs or surgical replacements. Specify exact start and end context.
+- Maintain existing indentation (4 spaces for Python, 2 spaces for TypeScript/TSX).
+- Do not introduce formatting-only changes (such as reformatting an entire file with black or prettier) when making functional edits.
