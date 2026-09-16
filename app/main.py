@@ -170,14 +170,42 @@ class TPMCApp:
                 self.config.port,
             )
 
+        # 6. Start keep-alive loop to prevent Render Free tier from sleeping
+        if self.config.webapp_url and self.config.webapp_url.startswith("https://"):
+            self._keep_alive_task = asyncio.create_task(self._keep_alive_loop())
+
         logger.info("TPMC is fully initialized and operational!")
 
         # Keep running until stop_event is triggered
         await self.stop_event.wait()
 
+    async def _keep_alive_loop(self) -> None:
+        """Ping public endpoint every 10 minutes to prevent Render Free tier from sleeping."""
+        import aiohttp
+        ping_url = f"{self.config.webapp_url}/health"
+        logger.info(f"Keep-alive self-ping worker active for {ping_url}")
+        # Wait 3 minutes after startup before initial ping
+        await asyncio.sleep(180)
+        async with aiohttp.ClientSession() as session:
+            while not self.stop_event.is_set():
+                try:
+                    async with session.get(ping_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                        logger.debug(f"Keep-alive ping to {ping_url} status: {resp.status}")
+                except Exception as e:
+                    logger.debug(f"Keep-alive ping notice: {e}")
+                try:
+                    await asyncio.wait_for(self.stop_event.wait(), timeout=600)
+                    break
+                except asyncio.TimeoutError:
+                    pass
+
     async def shutdown(self) -> None:
         """Gracefully shut down all components on SIGTERM / SIGINT."""
         logger.info("Initiating graceful shutdown sequence...")
+
+        # 0. Cancel keep-alive task
+        if hasattr(self, "_keep_alive_task") and self._keep_alive_task and not self._keep_alive_task.done():
+            self._keep_alive_task.cancel()
 
         # 1. Cancel running delivery jobs
         if self.job_manager:
