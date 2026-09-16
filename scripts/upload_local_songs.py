@@ -457,6 +457,21 @@ async def main() -> None:
                 except FloodWaitError as e:
                     print(f"\n   [FLOOD WAIT] Telegram rate limit: waiting {e.seconds} seconds...")
                     await asyncio.sleep(e.seconds + 2)
+                except (ConnectionError, OSError, RuntimeError) as e:
+                    print(f"\n   [NETWORK RESET] Connection interrupted: {e}")
+                    print("   [AUTO-RECONNECT] Re-establishing connection with Telegram...")
+                    try:
+                        await client.disconnect()
+                    except Exception:
+                        pass
+                    await asyncio.sleep(2)
+                    try:
+                        await client.connect()
+                        channel = await client.get_entity(channel_id)
+                        print("   [RECONNECTED] Successfully reconnected! Resuming song...")
+                    except Exception as rc_err:
+                        print(f"   [RECONNECT RETRY] Waiting 5s: {rc_err}...")
+                        await asyncio.sleep(5)
                 except Exception as e:
                     sys.stdout.write("\n")
                     print(f"   [FAILED] Could not upload {file_path.name}: {e}")
