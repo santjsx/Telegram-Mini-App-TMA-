@@ -119,15 +119,17 @@ class TelegramConnectionManager:
                     self._retry_bot_loop(e.seconds)
                 )
             except Exception as e:
+                err_str = str(e).lower()
+                retry_wait = 5 if ("two different ip addresses" in err_str or "authkeyduplicated" in err_str) else 60
                 self.bot_state = ConnectionState.RECONNECTING
-                self.bot_wait_seconds = 60
+                self.bot_wait_seconds = retry_wait
                 logger.warning(
                     f"⚠️ Bot authentication issue: {e}. "
                     f"WebApp & audio streaming remain 100% ONLINE! "
-                    f"Scheduling background retry in 60s..."
+                    f"Scheduling background retry in {retry_wait}s..."
                 )
                 self._bot_retry_task = asyncio.create_task(
-                    self._retry_bot_loop(60)
+                    self._retry_bot_loop(retry_wait)
                 )
 
             # Connect User MTProto Client (Required for Music Channel Indexing & Streaming)

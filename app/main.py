@@ -193,6 +193,11 @@ class TPMCApp:
                         logger.debug(f"Keep-alive ping to {ping_url} status: {resp.status}")
                 except Exception as e:
                     logger.debug(f"Keep-alive ping notice: {e}")
+
+                # Regularly reclaim unused memory to strictly stay under Render 512MB RAM
+                import gc
+                gc.collect()
+
                 try:
                     await asyncio.wait_for(self.stop_event.wait(), timeout=600)
                     break

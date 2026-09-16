@@ -96,6 +96,7 @@ class HealthServer:
         self.webapp_dir = Path(webapp_dir)
         self._audio_header_cache: dict[int, bytes] = {}
         self._audio_chunk_cache: dict[tuple[int, int], bytes] = {}
+        self._artwork_sem = asyncio.Semaphore(2)
 
         self.app = web.Application()
         self.runner: Optional[web.AppRunner] = None
@@ -312,66 +313,71 @@ class HealthServer:
         if not self.user_client:
             return web.Response(status=404)
 
-        try:
-            msg = await self.user_client.get_message(mid)
-            if not msg or not msg.document:
-                return web.Response(status=404)
-
-            # Download up to 3MB chunks for header metadata extraction
-            chunks = []
-            total = 0
-            async for chunk in self.user_client.client.iter_download(msg.document, request_size=3 * 1024 * 1024):
-                chunks.append(chunk)
-                total += len(chunk)
-                if total >= 3 * 1024 * 1024:
-                    break
-            data = b"".join(chunks)
-
-            pic_data = None
-            # 1. Try FLAC
-            try:
-                from mutagen.flac import FLAC
-                fl = FLAC(io.BytesIO(data))
-                if fl.pictures:
-                    pic_data = fl.pictures[0].data
-            except Exception:
-                pass
-
-            # 2. Try MutagenFile (ID3, MP3)
-            if not pic_data:
-                try:
-                    from mutagen import File as MutagenFile
-                    mf = MutagenFile(io.BytesIO(data))
-                    if hasattr(mf, "pictures") and mf.pictures:
-                        pic_data = mf.pictures[0].data
-                    elif mf and mf.tags:
-                        for k in mf.tags.keys():
-                            if k.startswith("APIC"):
-                                pic_data = mf.tags[k].data
-                                break
-                except Exception:
-                    pass
-
-            # 3. Try MP4 / M4A
-            if not pic_data and ("mp4" in (msg.document.mime_type or "") or "m4a" in (msg.document.mime_type or "")):
-                try:
-                    from mutagen.mp4 import MP4
-                    full_bytes = await self.user_client.client.download_media(msg.document, bytes)
-                    mp = MP4(io.BytesIO(full_bytes))
-                    if "covr" in mp and mp["covr"]:
-                        pic_data = bytes(mp["covr"][0])
-                except Exception:
-                    pass
-
-            if pic_data:
-                cached_file.write_bytes(pic_data)
-                return web.Response(
-                    body=pic_data,
-                    content_type="image/jpeg",
+        async with self._artwork_sem:
+            # Check if another concurrent request just finished writing the cache
+            if cached_file.exists() and cached_file.stat().st_size > 0:
+                return web.FileResponse(
+                    cached_file,
                     headers={"Cache-Control": "public, max-age=604800, immutable"},
                 )
-        except Exception as e:
-            logger.warning(f"Error extracting artwork for msg {mid}: {e}")
+
+            try:
+                msg = await self.user_client.get_message(mid)
+                if not msg or not msg.document:
+                    return web.Response(status=404)
+
+                # Download strictly the first 384KB header (never download the entire audio file into RAM)
+                chunks = []
+                total = 0
+                target_size = 384 * 1024
+                async for chunk in self.user_client.client.iter_download(
+                    msg.document, offset=0, request_size=target_size, chunk_size=128 * 1024
+                ):
+                    chunks.append(chunk)
+                    total += len(chunk)
+                    if total >= target_size:
+                        break
+                data = b"".join(chunks)
+
+                pic_data = None
+                # 1. Try FLAC
+                try:
+                    from mutagen.flac import FLAC
+                    fl = FLAC(io.BytesIO(data))
+                    if fl.pictures:
+                        pic_data = fl.pictures[0].data
+                except Exception:
+                    pass
+
+                # 2. Try MutagenFile (ID3, MP3)
+                if not pic_data:
+                    try:
+                        from mutagen import File as MutagenFile
+                        mf = MutagenFile(io.BytesIO(data))
+                        if hasattr(mf, "pictures") and mf.pictures:
+                            pic_data = mf.pictures[0].data
+                        elif mf and mf.tags:
+                            for k in mf.tags.keys():
+                                if k.startswith("APIC"):
+                                    pic_data = mf.tags[k].data
+                                    break
+                    except Exception:
+                        pass
+
+                # Explicitly release buffer memory
+                del data
+                import gc
+                gc.collect()
+
+                if pic_data:
+                    cached_file.write_bytes(pic_data)
+                    return web.Response(
+                        body=pic_data,
+                        content_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=604800, immutable"},
+                    )
+            except Exception as e:
+                logger.warning(f"Error extracting artwork for msg {mid}: {e}")
 
         return web.Response(status=404)
 
@@ -400,14 +406,14 @@ class HealthServer:
         })
 
     def _cache_chunk(self, mid: int, offset: int, data: bytes) -> None:
-        """Store chunk in bounded LRU memory cache."""
-        if len(self._audio_chunk_cache) > 400:  # ~50MB - 100MB of active chunks
+        """Store chunk in bounded LRU memory cache (max 64 chunks = ~8MB for Render 512MB RAM)."""
+        if len(self._audio_chunk_cache) > 64:
             oldest_key = next(iter(self._audio_chunk_cache))
             del self._audio_chunk_cache[oldest_key]
         self._audio_chunk_cache[(mid, offset)] = data
 
     async def _warm_header(self, mid: int) -> None:
-        """Background worker to pre-buffer the first 512KB of a track for instant startup."""
+        """Background worker to pre-buffer initial 256KB of a track for instant startup."""
         if mid in self._audio_header_cache or not self.user_client:
             return
         try:
@@ -416,7 +422,7 @@ class HealthServer:
                 return
             chunks = []
             total = 0
-            target_size = 512 * 1024
+            target_size = 256 * 1024
             async for chunk in self.user_client.client.iter_download(
                 msg.document, offset=0, request_size=target_size, chunk_size=128 * 1024
             ):
@@ -425,7 +431,7 @@ class HealthServer:
                 if total >= target_size:
                     break
             if chunks:
-                if len(self._audio_header_cache) > 50:
+                if len(self._audio_header_cache) > 16:  # Max 16 cached headers = ~4MB
                     oldest_key = next(iter(self._audio_header_cache))
                     del self._audio_header_cache[oldest_key]
                 combined = b"".join(chunks)[:target_size]

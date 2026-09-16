@@ -12,6 +12,7 @@ from pathlib import Path
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.custom.message import Message
+from telethon.errors import AuthKeyDuplicatedError, SecurityError
 
 from app.config import Config
 from app.auth.manager import AccessManager
@@ -63,11 +64,50 @@ class BotManager:
         self._register_handlers()
 
     async def connect(self) -> None:
-        """Authenticate and start the Bot using BOT_TOKEN with persistent session storage."""
-        await self.client.connect()
-        if not await self.client.is_user_authorized():
-            logger.info("Bot authorization not found in session; signing in via BOT_TOKEN...")
-            await self.client.sign_in(bot_token=self.config.bot_token)
+        """Authenticate and start the Bot using BOT_TOKEN with automatic self-healing on IP conflict."""
+        try:
+            await self.client.connect()
+            if not await self.client.is_user_authorized():
+                logger.info("Bot authorization not found in session; signing in via BOT_TOKEN...")
+                await self.client.sign_in(bot_token=self.config.bot_token)
+        except (AuthKeyDuplicatedError, SecurityError, Exception) as e:
+            err_msg = str(e).lower()
+            if (
+                isinstance(e, (AuthKeyDuplicatedError, SecurityError))
+                or "two different ip addresses" in err_msg
+                or "session file) was used" in err_msg
+            ):
+                logger.warning(
+                    f"⚠️ Bot session authorization key invalidated by Telegram (two different IP addresses conflict): {e}. "
+                    "Self-healing: purging poisoned session and establishing a clean fresh authorization..."
+                )
+                try:
+                    await self.client.disconnect()
+                except Exception:
+                    pass
+
+                session_file = Path("data/bot_session.txt")
+                if session_file.exists():
+                    try:
+                        session_file.unlink()
+                    except Exception:
+                        pass
+
+                self.config.bot_session = None
+                self.session = StringSession(None)
+                self.client = TelegramClient(
+                    self.session,
+                    self.config.api_id,
+                    self.config.api_hash,
+                    auto_reconnect=True,
+                    connection_retries=5,
+                    retry_delay=2,
+                )
+                await self.client.connect()
+                logger.info("Signing in Bot with clean fresh session via BOT_TOKEN...")
+                await self.client.sign_in(bot_token=self.config.bot_token)
+            else:
+                raise e
 
         # Persist session string to avoid ImportBotAuthorizationRequest flood waits on restarts
         try:
