@@ -30,6 +30,7 @@ class UserClientManager:
             retry_delay=2,
         )
         self._channel_entity = None
+        self._message_cache: dict[int, Message] = {}
 
     async def connect(self) -> None:
         """Connect and verify that the user session is authenticated."""
@@ -85,11 +86,20 @@ class UserClientManager:
             yield message
 
     async def get_message(self, message_id: int) -> Optional[Message]:
-        """Fetch a specific message by its ID."""
+        """Fetch a specific message by its ID, using memory cache to eliminate repeated Telegram round-trips."""
+        if message_id in self._message_cache:
+            return self._message_cache[message_id]
+
         if not self._channel_entity:
             await self.validate_channel()
 
-        return await self.client.get_messages(self._channel_entity, ids=message_id)
+        msg = await self.client.get_messages(self._channel_entity, ids=message_id)
+        if msg:
+            if len(self._message_cache) > 200:
+                oldest_key = next(iter(self._message_cache))
+                del self._message_cache[oldest_key]
+            self._message_cache[message_id] = msg
+        return msg
 
     async def forward_media(self, to_peer: int, message_ids: list[int]) -> list[Message]:
         """

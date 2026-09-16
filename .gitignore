@@ -34,3 +34,9 @@ data/*.db
 data/*.db-journal
 data/access_control.json
 data/*.sqlite
+data/artwork_cache/
+
+# Node dependencies
+node_modules/
+frontend/node_modules/
+

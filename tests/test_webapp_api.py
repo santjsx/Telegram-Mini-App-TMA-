@@ -246,3 +246,70 @@ async def test_api_artwork_serving(mock_config, populated_indexer, tmp_path):
         await client.close()
         if test_art_file.exists():
             test_art_file.unlink()
+
+
+@pytest.mark.asyncio
+async def test_api_stream_range_and_cache(mock_config, populated_indexer):
+    mock_user_client = AsyncMock()
+    mock_msg = MagicMock()
+    mock_msg.document = MagicMock()
+    mock_msg.document.size = 1000000
+    mock_msg.document.mime_type = "audio/mpeg"
+
+    async def fake_get_message(mid):
+        if mid == 101:
+            return mock_msg
+        return None
+
+    mock_user_client.get_message = AsyncMock(side_effect=fake_get_message)
+
+    # Simulated iter_download that yields 128KB chunks
+    async def fake_iter_download(doc, offset=0, request_size=None, chunk_size=128*1024):
+        # Yield dummy bytes corresponding to offset
+        bytes_left = request_size or doc.size
+        curr = offset
+        while bytes_left > 0:
+            take = min(bytes_left, chunk_size)
+            yield b"X" * take
+            curr += take
+            bytes_left -= take
+
+    mock_user_client.client = MagicMock()
+    mock_user_client.client.iter_download = fake_iter_download
+
+    server = HealthServer(
+        config=mock_config,
+        indexer=populated_indexer,
+        user_client=mock_user_client,
+    )
+    test_server = TestServer(server.app)
+    client = TestClient(test_server)
+    await client.start_server()
+
+    try:
+        # 1. Test probe request Range: bytes=0-1
+        resp = await client.get("/api/stream/101?user_id=12345", headers={"Range": "bytes=0-1"})
+        assert resp.status == 206
+        assert resp.headers["Content-Range"] == "bytes 0-1/1000000"
+        assert resp.headers["Content-Length"] == "2"
+        body = await resp.read()
+        assert len(body) == 2
+
+        # 2. Test seeking with unaligned offset Range: bytes=150000-200000
+        resp_seek = await client.get("/api/stream/101?user_id=12345", headers={"Range": "bytes=150000-200000"})
+        assert resp_seek.status == 206
+        assert resp_seek.headers["Content-Range"] == "bytes 150000-200000/1000000"
+        assert resp_seek.headers["Content-Length"] == str(200000 - 150000 + 1)
+        seek_body = await resp_seek.read()
+        assert len(seek_body) == (200000 - 150000 + 1)
+
+        # 3. Test that header cache accelerates subsequent start requests
+        server._audio_header_cache[101] = b"A" * 65536
+        resp_cached = await client.get("/api/stream/101?user_id=12345", headers={"Range": "bytes=0-100"})
+        assert resp_cached.status == 206
+        cached_body = await resp_cached.read()
+        assert len(cached_body) == 101
+        assert cached_body == b"A" * 101
+    finally:
+        await client.close()
+
