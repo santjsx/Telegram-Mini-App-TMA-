@@ -101,6 +101,7 @@ class TPMCApp:
         stats = self.indexer.get_stats()
         status_payload = {
             "status": "ok" if self.connection_manager.is_connected else "degraded",
+            "version": "2.2.0",
             "telegram": conn.get("user", "unknown"),
             "bot": conn.get("bot", "unknown"),
             "index": stats.get("state", "unknown").lower(),
