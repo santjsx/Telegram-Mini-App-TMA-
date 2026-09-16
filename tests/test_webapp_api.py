@@ -313,3 +313,47 @@ async def test_api_stream_range_and_cache(mock_config, populated_indexer):
     finally:
         await client.close()
 
+
+@pytest.mark.asyncio
+async def test_api_stream_prefetch(mock_config, populated_indexer):
+    mock_user_client = AsyncMock()
+    mock_msg = MagicMock()
+    mock_msg.document = MagicMock()
+    mock_msg.document.size = 500000
+    mock_msg.document.mime_type = "audio/mpeg"
+
+    async def fake_get_message(mid):
+        if mid == 101:
+            return mock_msg
+        return None
+
+    mock_user_client.get_message = AsyncMock(side_effect=fake_get_message)
+
+    server = HealthServer(
+        config=mock_config,
+        indexer=populated_indexer,
+        user_client=mock_user_client,
+    )
+    test_server = TestServer(server.app)
+    client = TestClient(test_server)
+    await client.start_server()
+
+    try:
+        # 1. First prefetch when not cached
+        resp = await client.get("/api/stream/prefetch/101?user_id=12345")
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] in ("prefetching", "ready")
+        assert data["message_id"] == 101
+
+        # 2. When header is cached, prefetch returns ready
+        server._audio_header_cache[101] = b"XYZ" * 100
+        resp_cached = await client.post("/api/stream/prefetch/101?user_id=12345")
+        assert resp_cached.status == 200
+        data_cached = await resp_cached.json()
+        assert data_cached["status"] == "ready"
+        assert data_cached["cached"] is True
+    finally:
+        await client.close()
+
+

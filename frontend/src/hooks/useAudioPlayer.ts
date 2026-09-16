@@ -48,6 +48,19 @@ export function useAudioPlayer() {
   const [queueIndex, setQueueIndex] = useState<number>(-1);
   const [sleepTimerRemaining, setSleepTimerRemaining] = useState<number | null>(null);
 
+  const prefetchedMidRef = useRef<Set<number>>(new Set());
+
+  // Background prefetch function
+  const prefetchTrack = useCallback((trackId: number) => {
+    if (prefetchedMidRef.current.has(trackId)) return;
+    prefetchedMidRef.current.add(trackId);
+    try {
+      fetch(`/api/stream/prefetch/${trackId}`, { method: 'POST' }).catch(() => {});
+    } catch {
+      // Ignored
+    }
+  }, []);
+
   // Initialize audio element
   useEffect(() => {
     let audio = document.getElementById('audio-engine') as HTMLAudioElement | null;
@@ -57,6 +70,7 @@ export function useAudioPlayer() {
       document.body.appendChild(audio);
     }
     audioRef.current = audio;
+    audio.preload = 'auto';
     audio.volume = 0.9;
 
     const onTimeUpdate = () => {
@@ -64,6 +78,17 @@ export function useAudioPlayer() {
       setCurrentTime(audio.currentTime);
       if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity) {
         setDuration(audio.duration);
+        if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
+          try {
+            navigator.mediaSession.setPositionState({
+              duration: audio.duration,
+              playbackRate: audio.playbackRate,
+              position: audio.currentTime,
+            });
+          } catch {
+            // Ignored
+          }
+        }
       }
     };
 
@@ -94,6 +119,28 @@ export function useAudioPlayer() {
       audio?.removeEventListener('pause', onPause);
     };
   }, []);
+
+  // Background prefetch next tracks in queue
+  useEffect(() => {
+    if (queue.length > 0 && queueIndex >= 0) {
+      const nextIdx = (queueIndex + 1) % queue.length;
+      const nextTrackItem = queue[nextIdx];
+      if (nextTrackItem && nextTrackItem.id !== currentTrack?.id) {
+        prefetchTrack(nextTrackItem.id);
+      }
+    }
+  }, [queue, queueIndex, currentTrack, prefetchTrack]);
+
+  // When playback progress > 60%, prefetch next tracks
+  useEffect(() => {
+    if (duration > 0 && currentTime / duration > 0.60 && queue.length > 0 && queueIndex >= 0) {
+      const nextIdx = (queueIndex + 1) % queue.length;
+      const nextTrackItem = queue[nextIdx];
+      if (nextTrackItem) {
+        prefetchTrack(nextTrackItem.id);
+      }
+    }
+  }, [currentTime, duration, queue, queueIndex, prefetchTrack]);
 
   // Sleep Timer countdown
   useEffect(() => {
@@ -398,5 +445,6 @@ export function useAudioPlayer() {
     removeFromQueue,
     clearQueue,
     setSleepTimer,
+    prefetchTrack,
   };
 }

@@ -11,6 +11,9 @@ import { FullPlayerModal } from './components/FullPlayerModal';
 import { QueueDrawer } from './components/QueueDrawer';
 import { LyricsDetailsModal } from './components/LyricsDetailsModal';
 import { SleepTimerModal } from './components/SleepTimerModal';
+import { PlaylistsModal } from './components/PlaylistsModal';
+import { AlbumModal } from './components/AlbumModal';
+import { ArtistModal } from './components/ArtistModal';
 import { getTelegramInitData } from './utils';
 
 export function App() {
@@ -29,6 +32,13 @@ export function App() {
   const [isDetailsOpen, setIsDetailsOpen] = useState<boolean>(false);
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState<boolean>(false);
   const [detailsTrack, setDetailsTrack] = useState<Track | null>(null);
+
+  // Million-Dollar App Modals
+  const [isPlaylistsOpen, setIsPlaylistsOpen] = useState<boolean>(false);
+  const [trackToAdd, setTrackToAdd] = useState<Track | null>(null);
+  const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null);
+  const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
+  const [playlistsCount, setPlaylistsCount] = useState<number>(1);
 
   const player = useAudioPlayer();
 
@@ -52,12 +62,23 @@ export function App() {
     const bb = tg.BackButton;
 
     const anyModalOpen =
-      isFullPlayerOpen || isQueueOpen || isDetailsOpen || isSleepTimerOpen;
+      isFullPlayerOpen ||
+      isQueueOpen ||
+      isDetailsOpen ||
+      isSleepTimerOpen ||
+      isPlaylistsOpen ||
+      !!selectedAlbum ||
+      !!selectedArtist;
 
     if (anyModalOpen) {
       bb.show();
       const onBack = () => {
-        if (isDetailsOpen) setIsDetailsOpen(false);
+        if (selectedAlbum) setSelectedAlbum(null);
+        else if (selectedArtist) setSelectedArtist(null);
+        else if (isPlaylistsOpen) {
+          setIsPlaylistsOpen(false);
+          setTrackToAdd(null);
+        } else if (isDetailsOpen) setIsDetailsOpen(false);
         else if (isSleepTimerOpen) setIsSleepTimerOpen(false);
         else if (isQueueOpen) setIsQueueOpen(false);
         else if (isFullPlayerOpen) setIsFullPlayerOpen(false);
@@ -67,9 +88,17 @@ export function App() {
     } else {
       bb.hide();
     }
-  }, [isFullPlayerOpen, isQueueOpen, isDetailsOpen, isSleepTimerOpen]);
+  }, [
+    isFullPlayerOpen,
+    isQueueOpen,
+    isDetailsOpen,
+    isSleepTimerOpen,
+    isPlaylistsOpen,
+    selectedAlbum,
+    selectedArtist,
+  ]);
 
-  // Load favorites & recent from LocalStorage
+  // Load favorites & recent & playlists count from LocalStorage
   useEffect(() => {
     try {
       const favStr = localStorage.getItem('tpmc_favorites');
@@ -77,10 +106,16 @@ export function App() {
 
       const recStr = localStorage.getItem('tpmc_recent_tracks');
       if (recStr) setRecentTrackIds(JSON.parse(recStr));
+
+      const plStr = localStorage.getItem('tpmc_custom_playlists');
+      if (plStr) {
+        const parsedPl = JSON.parse(plStr);
+        setPlaylistsCount(Array.isArray(parsedPl) ? parsedPl.length : 1);
+      }
     } catch {
       // Ignored
     }
-  }, []);
+  }, [isPlaylistsOpen]);
 
   // Toggle Favorite
   const handleToggleFavorite = useCallback((trackId: number) => {
@@ -230,7 +265,7 @@ export function App() {
           />
         )}
 
-        {/* Album & Artist Carousel Section */}
+        {/* Album & Artist Carousel Section (Clicking opens rich dedicated modal!) */}
         {!searchQuery && !selectedFilterName && activeTab === 'all' && library && (
           <div className="space-y-6 pt-1">
             {library.albums.length > 0 && (
@@ -238,7 +273,10 @@ export function App() {
                 title="Top Albums"
                 items={library.albums}
                 type="album"
-                onSelect={(name) => setSelectedFilterName(name)}
+                onSelect={(name) => {
+                  triggerHaptic('medium');
+                  setSelectedAlbum(name);
+                }}
               />
             )}
             {library.artists.length > 0 && (
@@ -246,7 +284,10 @@ export function App() {
                 title="Featured Artists"
                 items={library.artists}
                 type="artist"
-                onSelect={(name) => setSelectedFilterName(name)}
+                onSelect={(name) => {
+                  triggerHaptic('medium');
+                  setSelectedArtist(name);
+                }}
               />
             )}
           </div>
@@ -257,13 +298,19 @@ export function App() {
           <CategoryTabs
             activeTab={activeTab}
             setActiveTab={(tab) => {
-              setActiveTab(tab);
-              setSelectedFilterName(null);
+              if (tab === 'playlists') {
+                triggerHaptic('light');
+                setIsPlaylistsOpen(true);
+              } else {
+                setActiveTab(tab);
+                setSelectedFilterName(null);
+              }
             }}
             counts={{
               all: allTracks.length,
               favorites: favorites.length,
               recent: recentTrackIds.length,
+              playlists: playlistsCount,
               albums: library?.albums.length || 0,
               artists: library?.artists.length || 0,
             }}
@@ -280,7 +327,7 @@ export function App() {
                 ? 'Recently Played'
                 : 'Music Catalog'}
             </h3>
-            <span className="text-xs text-slate-500 font-medium">
+            <span className="text-xs text-slate-500 font-medium font-mono">
               {filteredTracks.length} {filteredTracks.length === 1 ? 'song' : 'songs'}
             </span>
           </div>
@@ -302,10 +349,24 @@ export function App() {
               onPlay={(t) => player.playTrack(t, filteredTracks)}
               onPlayNext={player.playNext}
               onAddToQueue={player.addToQueue}
+              onAddToPlaylist={(t) => {
+                triggerHaptic('light');
+                setTrackToAdd(t);
+                setIsPlaylistsOpen(true);
+              }}
+              onSelectAlbum={(alb) => {
+                triggerHaptic('light');
+                setSelectedAlbum(alb);
+              }}
+              onSelectArtist={(art) => {
+                triggerHaptic('light');
+                setSelectedArtist(art);
+              }}
               onOpenDetails={(t) => {
                 setDetailsTrack(t);
                 setIsDetailsOpen(true);
               }}
+              onPrefetch={player.prefetchTrack}
             />
           )}
         </section>
@@ -365,6 +426,12 @@ export function App() {
           setDetailsTrack(player.currentTrack);
           setIsDetailsOpen(true);
         }}
+        onOpenAddToPlaylist={() => {
+          if (player.currentTrack) {
+            setTrackToAdd(player.currentTrack);
+            setIsPlaylistsOpen(true);
+          }
+        }}
       />
 
       {/* Slide-over Queue Drawer */}
@@ -376,6 +443,59 @@ export function App() {
         onPlayTrack={(t) => player.playTrack(t)}
         onRemoveTrack={player.removeFromQueue}
         onClearQueue={player.clearQueue}
+      />
+
+      {/* Playlists Manager Modal */}
+      <PlaylistsModal
+        isOpen={isPlaylistsOpen}
+        onClose={() => {
+          setIsPlaylistsOpen(false);
+          setTrackToAdd(null);
+        }}
+        allTracks={allTracks}
+        trackToAdd={trackToAdd}
+        onPlayTracks={(tracks) => {
+          if (tracks.length > 0) {
+            player.playTrack(tracks[0], tracks);
+          }
+        }}
+        onTrackAdded={() => {
+          triggerHaptic('medium');
+        }}
+      />
+
+      {/* Album Showcase Modal */}
+      <AlbumModal
+        isOpen={!!selectedAlbum}
+        onClose={() => setSelectedAlbum(null)}
+        albumName={selectedAlbum}
+        allTracks={allTracks}
+        currentTrack={player.currentTrack}
+        isPlaying={player.isPlaying}
+        onPlayTrack={(t, q) => player.playTrack(t, q)}
+        onSelectArtist={(art) => {
+          setSelectedAlbum(null);
+          setSelectedArtist(art);
+        }}
+        favorites={favorites}
+        onToggleFavorite={handleToggleFavorite}
+      />
+
+      {/* Artist Profile Modal */}
+      <ArtistModal
+        isOpen={!!selectedArtist}
+        onClose={() => setSelectedArtist(null)}
+        artistName={selectedArtist}
+        allTracks={allTracks}
+        currentTrack={player.currentTrack}
+        isPlaying={player.isPlaying}
+        onPlayTrack={(t, q) => player.playTrack(t, q)}
+        onSelectAlbum={(alb) => {
+          setSelectedArtist(null);
+          setSelectedAlbum(alb);
+        }}
+        favorites={favorites}
+        onToggleFavorite={handleToggleFavorite}
       />
 
       {/* Track Specs & Lyrics Modal */}

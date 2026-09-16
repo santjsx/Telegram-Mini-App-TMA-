@@ -1,5 +1,5 @@
 import React from 'react';
-import { Music, Heart, Clock, Disc, Mic2 } from 'lucide-react';
+import { Music, Heart, Clock, ListMusic, Disc, Mic2 } from 'lucide-react';
 import { ActiveTab } from '../types';
 import { triggerHaptic } from '../hooks/useAudioPlayer';
 
@@ -10,6 +10,7 @@ interface CategoryTabsProps {
     all: number;
     favorites: number;
     recent: number;
+    playlists: number;
     albums: number;
     artists: number;
   };
@@ -23,6 +24,7 @@ export const CategoryTabs: React.FC<CategoryTabsProps> = ({
   const tabs = [
     { id: 'all' as ActiveTab, label: 'All Songs', icon: Music, count: counts.all },
     { id: 'favorites' as ActiveTab, label: 'Favorites', icon: Heart, count: counts.favorites },
+    { id: 'playlists' as ActiveTab, label: 'Playlists', icon: ListMusic, count: counts.playlists },
     { id: 'recent' as ActiveTab, label: 'Recent', icon: Clock, count: counts.recent },
     { id: 'albums' as ActiveTab, label: 'Albums', icon: Disc, count: counts.albums },
     { id: 'artists' as ActiveTab, label: 'Artists', icon: Mic2, count: counts.artists },

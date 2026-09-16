@@ -16,6 +16,9 @@ import {
   Gauge,
   FileText,
   Share2,
+  FolderPlus,
+  Sparkles,
+  Check,
 } from 'lucide-react';
 import { Track, RepeatMode } from '../types';
 import { formatTime } from '../utils';
@@ -49,6 +52,7 @@ interface FullPlayerModalProps {
   onOpenQueue: () => void;
   onOpenSleepTimer: () => void;
   onOpenDetails: () => void;
+  onOpenAddToPlaylist?: () => void;
 }
 
 export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({
@@ -79,24 +83,39 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({
   onOpenQueue,
   onOpenSleepTimer,
   onOpenDetails,
+  onOpenAddToPlaylist,
 }) => {
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekVal, setSeekVal] = useState(0);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
+  const [copiedShare, setCopiedShare] = useState(false);
 
   if (!isOpen || !currentTrack) return null;
 
   const displayTime = isSeeking ? seekVal : currentTime;
   const progressPercent = duration > 0 ? (displayTime / duration) * 100 : 0;
   const bufferedPercent = buffered * 100;
+  const remainingTime = Math.max(0, duration - displayTime);
+  const isLossless = currentTrack.audio_format === 'FLAC' || currentTrack.mime_type.includes('flac');
 
   const speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 
+  const handleShare = () => {
+    triggerHaptic('medium');
+    const shareText = `🎵 Listening to "${currentTrack.title}" by ${currentTrack.artist} on Telegram Music Cloud!`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(shareText).then(() => {
+        setCopiedShare(true);
+        setTimeout(() => setCopiedShare(false), 2000);
+      }).catch(() => {});
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center items-center bg-black/80 backdrop-blur-2xl transition-all duration-300">
+    <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center items-center bg-black/85 backdrop-blur-2xl transition-all duration-300">
       {/* Dynamic Background Aura */}
       <div
-        className="absolute inset-0 opacity-25 pointer-events-none blur-3xl transition-all duration-1000"
+        className="absolute inset-0 opacity-30 pointer-events-none blur-3xl transition-all duration-1000"
         style={{
           background: `radial-gradient(circle at center 30%, ${currentTrack.palette.primary}, ${currentTrack.palette.secondary} 40%, transparent 80%)`,
         }}
@@ -128,6 +147,19 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({
 
           <div className="flex items-center gap-2">
             <button
+              onClick={handleShare}
+              className="w-10 h-10 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 flex items-center justify-center border border-white/10 active:scale-95 transition-all"
+              aria-label="Share track"
+              title="Share track"
+            >
+              {copiedShare ? (
+                <Check className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <Share2 className="w-4 h-4" />
+              )}
+            </button>
+
+            <button
               onClick={() => {
                 triggerHaptic('light');
                 onOpenDetails();
@@ -140,8 +172,8 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({
           </div>
         </div>
 
-        {/* Vinyl & Artwork Display */}
-        <div className="relative my-6 flex items-center justify-center">
+        {/* Artwork & Vinyl Showcase */}
+        <div className="relative my-6 flex flex-col items-center justify-center">
           <div className="relative w-64 h-64 sm:w-72 sm:h-72 group">
             {/* Spinning Vinyl */}
             <div
@@ -174,40 +206,96 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({
             {/* Spindle hole */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-slate-950 border-2 border-white/40 z-20" />
           </div>
+
+          {/* Animated 12-bar dynamic EQ visualizer */}
+          <div className="flex items-center gap-1 mt-4 h-6">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((bar) => {
+              const heightClass = isPlaying
+                ? bar % 3 === 0
+                  ? 'h-5'
+                  : bar % 2 === 0
+                  ? 'h-3.5'
+                  : 'h-2'
+                : 'h-1';
+              return (
+                <div
+                  key={bar}
+                  className={`w-1 rounded-full bg-gradient-to-t from-pink-500 to-purple-400 transition-all duration-300 ${heightClass}`}
+                  style={{
+                    animationDelay: `${bar * 80}ms`,
+                  }}
+                />
+              );
+            })}
+          </div>
         </div>
 
         {/* Track Title & Artist & Favorite */}
-        <div className="flex items-center justify-between gap-4 mt-2">
+        <div className="flex items-center justify-between gap-4 mt-1">
           <div className="min-w-0 flex-1">
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight truncate">
-              {currentTrack.title}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight truncate">
+                {currentTrack.title}
+              </h2>
+              {isLossless && (
+                <span className="text-[10px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 shrink-0">
+                  <Sparkles className="w-2.5 h-2.5" />
+                  LOSSLESS
+                </span>
+              )}
+            </div>
             <p className="text-sm font-medium text-slate-400 truncate mt-0.5">
               {currentTrack.artist}
             </p>
           </div>
 
-          <button
-            onClick={() => {
-              triggerHaptic('medium');
-              onToggleFavorite();
-            }}
-            className={`p-3 rounded-2xl border transition-all active:scale-90 ${
-              isFavorite
-                ? 'bg-pink-500/20 border-pink-500/40 text-pink-500'
-                : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
-            }`}
-            aria-label="Toggle favorite"
-          >
-            <Heart className={`w-5 h-5 ${isFavorite ? 'fill-current' : ''}`} />
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenAddToPlaylist && (
+              <button
+                onClick={() => {
+                  triggerHaptic('light');
+                  onOpenAddToPlaylist();
+                }}
+                className="p-3 rounded-2xl border bg-white/5 border-white/10 text-slate-400 hover:text-white transition-all active:scale-90"
+                title="Add to Playlist"
+                aria-label="Add to Playlist"
+              >
+                <FolderPlus className="w-5 h-5" />
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                triggerHaptic('medium');
+                onToggleFavorite();
+              }}
+              className={`p-3 rounded-2xl border transition-all active:scale-90 ${
+                isFavorite
+                  ? 'bg-pink-500/20 border-pink-500/40 text-pink-500'
+                  : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
+              }`}
+              aria-label="Toggle favorite"
+            >
+              <Heart className={`w-5 h-5 ${isFavorite ? 'fill-current' : ''}`} />
+            </button>
+          </div>
         </div>
 
-        {/* Scrubber / Progress Bar */}
+        {/* Apple Music Style Scrubber with Draggable Glowing Knob and Time Tooltip */}
         <div className="mt-6">
-          <div className="relative flex items-center group">
+          <div className="relative flex items-center group py-2">
+            {/* Draggable Time Preview Tooltip */}
+            {isSeeking && (
+              <div
+                className="absolute -top-7 px-2.5 py-1 rounded-lg bg-slate-900 border border-white/20 text-[11px] font-mono font-bold text-white shadow-xl -translate-x-1/2 pointer-events-none z-30"
+                style={{ left: `${progressPercent}%` }}
+              >
+                {formatTime(seekVal)}
+              </div>
+            )}
+
             {/* Background track & buffered indicator */}
-            <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden relative pointer-events-none">
+            <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden relative pointer-events-none">
               <div
                 className="absolute top-0 left-0 bottom-0 bg-white/20 transition-all duration-300"
                 style={{ width: `${bufferedPercent}%` }}
@@ -218,7 +306,18 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({
               />
             </div>
 
-            {/* Invisible Range Slider for Smooth Dragging */}
+            {/* Draggable Glowing Apple-Style Knob */}
+            <div
+              className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-white shadow-lg pointer-events-none transition-transform duration-75 z-20 ${
+                isSeeking ? 'scale-125 ring-4 ring-pink-500/40' : 'group-hover:scale-110'
+              }`}
+              style={{
+                left: `${progressPercent}%`,
+                boxShadow: `0 0 12px ${currentTrack.palette.primary}`,
+              }}
+            />
+
+            {/* Native Range Slider */}
             <input
               type="range"
               min={0}
@@ -236,15 +335,15 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({
                 setIsSeeking(false);
                 onSeek(seekVal);
               }}
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-4"
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-8 z-20"
               aria-label="Seek track"
             />
           </div>
 
-          {/* Time Labels */}
-          <div className="flex justify-between text-xs font-mono text-slate-400 mt-2">
+          {/* Time Labels (Elapsed & Remaining) */}
+          <div className="flex justify-between text-xs font-mono text-slate-400 mt-1 px-0.5">
             <span>{formatTime(displayTime)}</span>
-            <span>{formatTime(duration)}</span>
+            <span>-{formatTime(remainingTime)}</span>
           </div>
         </div>
 
@@ -310,7 +409,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({
           </button>
         </div>
 
-        {/* Volume Slider Bar */}
+        {/* iOS-Style Volume Slider Bar */}
         <div className="flex items-center gap-3 mt-6 px-4 py-2.5 rounded-2xl bg-white/[0.04] border border-white/5">
           <button
             onClick={onToggleMute}

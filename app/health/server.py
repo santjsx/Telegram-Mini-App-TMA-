@@ -95,6 +95,7 @@ class HealthServer:
         self.config = config
         self.webapp_dir = Path(webapp_dir)
         self._audio_header_cache: dict[int, bytes] = {}
+        self._audio_chunk_cache: dict[tuple[int, int], bytes] = {}
 
         self.app = web.Application()
         self.runner: Optional[web.AppRunner] = None
@@ -108,6 +109,8 @@ class HealthServer:
         self.app.router.add_get("/api/library", self.handle_api_library)
         self.app.router.add_get("/api/stream/{message_id}", self.handle_api_stream)
         self.app.router.add_get("/api/stream-info/{message_id}", self.handle_api_stream_info)
+        self.app.router.add_get("/api/stream/prefetch/{message_id}", self.handle_api_prefetch)
+        self.app.router.add_post("/api/stream/prefetch/{message_id}", self.handle_api_prefetch)
         self.app.router.add_get("/api/artwork/{message_id}", self.handle_api_artwork)
 
         # Static assets for the React web app (built dist assets or webapp assets)
@@ -396,6 +399,13 @@ class HealthServer:
             "mime_type": msg.document.mime_type or "audio/mpeg",
         })
 
+    def _cache_chunk(self, mid: int, offset: int, data: bytes) -> None:
+        """Store chunk in bounded LRU memory cache."""
+        if len(self._audio_chunk_cache) > 400:  # ~50MB - 100MB of active chunks
+            oldest_key = next(iter(self._audio_chunk_cache))
+            del self._audio_chunk_cache[oldest_key]
+        self._audio_chunk_cache[(mid, offset)] = data
+
     async def _warm_header(self, mid: int) -> None:
         """Background worker to pre-buffer the first 512KB of a track for instant startup."""
         if mid in self._audio_header_cache or not self.user_client:
@@ -418,9 +428,30 @@ class HealthServer:
                 if len(self._audio_header_cache) > 50:
                     oldest_key = next(iter(self._audio_header_cache))
                     del self._audio_header_cache[oldest_key]
-                self._audio_header_cache[mid] = b"".join(chunks)[:target_size]
+                combined = b"".join(chunks)[:target_size]
+                self._audio_header_cache[mid] = combined
+                # Also populate chunk cache for offset 0
+                self._cache_chunk(mid, 0, combined[:128 * 1024])
         except Exception as e:
             logger.debug(f"Pre-warm header failed for track {mid}: {e}")
+
+    async def handle_api_prefetch(self, request: web.Request) -> web.Response:
+        """Prefetch audio header/chunks for next tracks in queue so playback starts instantly."""
+        is_authorized, _ = self._authenticate_request(request)
+        if not is_authorized:
+            return web.json_response({"error": "unauthorized"}, status=403)
+
+        try:
+            mid = int(request.match_info["message_id"])
+        except ValueError:
+            return web.json_response({"error": "invalid message_id"}, status=400)
+
+        if mid in self._audio_header_cache:
+            return web.json_response({"status": "ready", "message_id": mid, "cached": True})
+
+        # Launch background pre-warming of initial 512KB header
+        asyncio.create_task(self._warm_header(mid))
+        return web.json_response({"status": "prefetching", "message_id": mid, "cached": False})
 
     async def handle_api_stream(self, request: web.Request) -> web.StreamResponse:
         """
@@ -483,7 +514,7 @@ class HealthServer:
                             "Accept-Ranges": "bytes",
                             "Content-Range": f"bytes {start}-{end}/{total_size}",
                             "Content-Length": str(length),
-                            "Cache-Control": "public, max-age=86400",
+                            "Cache-Control": "public, max-age=604800, immutable",
                         },
                     )
 
@@ -492,7 +523,7 @@ class HealthServer:
             response.headers["Accept-Ranges"] = "bytes"
             response.headers["Content-Range"] = f"bytes {start}-{end}/{total_size}"
             response.headers["Content-Length"] = str(length)
-            response.headers["Cache-Control"] = "public, max-age=86400"
+            response.headers["Cache-Control"] = "public, max-age=604800, immutable"
             await response.prepare(request)
 
             # Check if we can serve initial bytes from header cache
@@ -505,6 +536,24 @@ class HealthServer:
                 bytes_sent += to_send_from_cache
                 curr_start = to_send_from_cache
 
+            # Check if consecutive chunks are available in _audio_chunk_cache
+            while bytes_sent < length:
+                aligned_chunk_offset = (curr_start // CHUNK_SIZE) * CHUNK_SIZE
+                chunk_key = (mid, aligned_chunk_offset)
+                if chunk_key in self._audio_chunk_cache:
+                    cached_chunk = self._audio_chunk_cache[chunk_key]
+                    skip_in_chunk = curr_start - aligned_chunk_offset
+                    slice_data = cached_chunk[skip_in_chunk:]
+                    needed = length - bytes_sent
+                    to_send = slice_data[:needed]
+                    if not to_send:
+                        break
+                    await response.write(to_send)
+                    bytes_sent += len(to_send)
+                    curr_start += len(to_send)
+                else:
+                    break
+
             if bytes_sent < length:
                 # MTProto alignment: align offset down to CHUNK_SIZE multiple
                 aligned_start = (curr_start // CHUNK_SIZE) * CHUNK_SIZE
@@ -515,12 +564,17 @@ class HealthServer:
                     is_first_chunk = True
                     accumulated_header = []
                     total_accumulated = 0
+                    current_download_offset = aligned_start
 
                     async for raw_chunk in self.user_client.client.iter_download(
                         msg.document,
                         offset=aligned_start,
                         chunk_size=CHUNK_SIZE,
                     ):
+                        # Cache the chunk in memory for instant seeking / scrubbing later
+                        self._cache_chunk(mid, current_download_offset, raw_chunk)
+                        current_download_offset += len(raw_chunk)
+
                         chunk = raw_chunk
                         if is_first_chunk:
                             is_first_chunk = False
