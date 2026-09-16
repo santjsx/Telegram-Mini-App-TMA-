@@ -50,6 +50,9 @@ class Config:
     # WebApp URL
     webapp_url: Optional[str] = None
 
+    # Optional persistent bot session string (to avoid ImportBotAuthorizationRequest flood waits)
+    bot_session: Optional[str] = None
+
     @classmethod
     def load_from_env(cls, env_path: Optional[str] = None) -> Config:
         """
@@ -164,6 +167,8 @@ class Config:
             raw_webapp_url = f"http://localhost:{port}"
         webapp_url = raw_webapp_url.rstrip("/")
 
+        bot_session = os.getenv("BOT_SESSION", "").strip() or None
+
         return cls(
             api_id=api_id,
             api_hash=api_hash,
@@ -180,4 +185,5 @@ class Config:
             flood_wait_max=flood_wait_max,
             approved_user_ids=approved_user_ids,
             webapp_url=webapp_url,
+            bot_session=bot_session,
         )

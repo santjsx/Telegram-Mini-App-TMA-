@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from typing import Callable, Coroutine, Any, Optional
+from pathlib import Path
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.custom.message import Message
@@ -22,8 +23,19 @@ class BotManager:
     def __init__(self, config: Config, access_manager: Optional[AccessManager] = None) -> None:
         self.config = config
         self.access_manager = access_manager
-        # Use an in-memory StringSession so nothing is written to Render's ephemeral disk
-        self.session = StringSession()
+
+        # Check for persistent bot session string:
+        # 1. Config / env var BOT_SESSION
+        # 2. Local file data/bot_session.txt
+        initial_session = config.bot_session or ""
+        session_file = Path("data/bot_session.txt")
+        if not initial_session and session_file.exists():
+            try:
+                initial_session = session_file.read_text(encoding="utf-8").strip()
+            except Exception:
+                initial_session = ""
+
+        self.session = StringSession(initial_session or None)
         self.client = TelegramClient(
             self.session,
             config.api_id,
@@ -50,10 +62,23 @@ class BotManager:
         self._unauthorized_handler = unauthorized_handler
 
     async def connect(self) -> None:
-        """Authenticate and start the Bot using BOT_TOKEN."""
+        """Authenticate and start the Bot using BOT_TOKEN with persistent session storage."""
         await self.client.connect()
         if not await self.client.is_user_authorized():
+            logger.info("Bot authorization not found in session; signing in via BOT_TOKEN...")
             await self.client.sign_in(bot_token=self.config.bot_token)
+
+        # Persist session string to avoid ImportBotAuthorizationRequest flood waits on restarts
+        try:
+            saved_str = self.session.save()
+            if saved_str:
+                session_file = Path("data/bot_session.txt")
+                session_file.parent.mkdir(parents=True, exist_ok=True)
+                session_file.write_text(saved_str, encoding="utf-8")
+                logger.info("Bot session key persisted to data/bot_session.txt")
+        except Exception as e:
+            logger.debug(f"Could not persist bot session: {e}")
+
         me = await self.client.get_me()
         logger.info(f"Telegram Bot online as: @{me.username} [ID: {me.id}]")
         self._register_handlers()

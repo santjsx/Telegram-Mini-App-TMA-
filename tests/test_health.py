@@ -44,3 +44,64 @@ async def test_health_server_health_callback():
         assert data["tracks"] == 42
     finally:
         await client.close()
+
+
+@pytest.mark.asyncio
+async def test_bot_flood_wait_fault_tolerance():
+    from unittest.mock import AsyncMock, MagicMock
+    from telethon.errors import FloodWaitError
+    from app.telegram.connection import TelegramConnectionManager, ConnectionState
+    from app.config import Config
+
+    cfg = Config(
+        api_id=12345,
+        api_hash="hash",
+        bot_token="token",
+        channel_id=-1001,
+        telegram_session="session",
+        authorized_user_id=12345,
+    )
+
+    conn_mgr = TelegramConnectionManager(cfg)
+
+    # Mock BotManager that raises FloodWaitError (e.g. 1500s)
+    mock_bot = MagicMock()
+    flood_err = FloodWaitError(request=None)
+    flood_err.seconds = 1500
+    mock_bot.connect = AsyncMock(side_effect=flood_err)
+    mock_bot.disconnect = AsyncMock()
+
+    # Mock UserClientManager that connects normally
+    mock_user = MagicMock()
+    mock_user.connect = AsyncMock()
+    mock_user.disconnect = AsyncMock()
+
+    # connect_all must complete without crashing
+    await conn_mgr.connect_all(mock_bot, mock_user)
+
+    # Bot should be in RECONNECTING state, user should be CONNECTED
+    assert conn_mgr.bot_state == ConnectionState.RECONNECTING
+    assert conn_mgr.user_state == ConnectionState.CONNECTED
+
+    summary = conn_mgr.get_status_summary()
+    assert summary["user"] == "connected"
+    assert "reconnecting" in summary["bot"]
+    assert "1500" in summary["bot"]
+    assert summary["overall"] == "degraded"
+
+    # Health server must return HTTP 200 OK
+    server = HealthServer(status_provider=lambda: summary)
+    test_server = TestServer(server.app)
+    client = TestClient(test_server)
+    await client.start_server()
+
+    try:
+        resp = await client.get("/health")
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["user"] == "connected"
+        assert "reconnecting" in data["bot"]
+    finally:
+        await client.close()
+        await conn_mgr.disconnect_all()
+
