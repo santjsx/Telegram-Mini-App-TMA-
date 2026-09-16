@@ -60,6 +60,7 @@ class BotManager:
         self._callback_router = callback_router
         self._channel_post_handler = channel_post_handler
         self._unauthorized_handler = unauthorized_handler
+        self._register_handlers()
 
     async def connect(self) -> None:
         """Authenticate and start the Bot using BOT_TOKEN with persistent session storage."""
@@ -130,6 +131,10 @@ class BotManager:
             logger.warning(f"Could not register Telegram bot commands: {e}")
 
     def _register_handlers(self) -> None:
+        if getattr(self, "_handlers_registered", False):
+            return
+        self._handlers_registered = True
+
         @self.client.on(events.NewMessage())
         async def handle_message(event: events.NewMessage.Event) -> None:
             # 1. If message is posted in the music storage channel
