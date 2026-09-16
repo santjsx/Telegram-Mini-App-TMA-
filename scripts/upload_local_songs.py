@@ -373,48 +373,24 @@ async def main() -> None:
             print(f"    Caption:\n{caption}\n")
         return
 
-    # Select client: User session if valid, or automatic Bot session fallback
-    client = None
-    if not args.as_bot and session_str:
-        test_client = TelegramClient(
-            StringSession(session_str),
-            int(api_id),
-            api_hash,
-            connection_retries=3,
-            retry_delay=1,
-        )
-        try:
-            await test_client.connect()
-            if await test_client.is_user_authorized():
-                client = test_client
-                me = await client.get_me()
-                print(f"[CONNECTED] Authorized via User Account: {me.first_name} [ID: {me.id}]")
-            else:
-                await test_client.disconnect()
-        except Exception as e:
-            print(f"[NOTE] User session not available locally ({e}). Switching to Bot uploader...")
-            try:
-                await test_client.disconnect()
-            except Exception:
-                pass
-
-    if client is None:
-        bot_sess = bot_session or None
-        client = TelegramClient(
-            StringSession(bot_sess),
-            int(api_id),
-            api_hash,
-            connection_retries=10,
-            retry_delay=2,
-        )
-        await client.connect()
-        if not await client.is_user_authorized():
-            if not bot_token:
-                print("[ERROR] Neither valid TELEGRAM_SESSION nor BOT_TOKEN found.")
-                sys.exit(1)
-            await client.sign_in(bot_token=bot_token)
-        me = await client.get_me()
-        print(f"[CONNECTED] Authorized via Bot Account: @{me.username} [ID: {me.id}]")
+    # Use dedicated local session file to completely eliminate multi-IP auth collisions with Render
+    Path("data").mkdir(parents=True, exist_ok=True)
+    session_file = "data/uploader_bot_isolated"
+    client = TelegramClient(
+        session_file,
+        int(api_id),
+        api_hash,
+        connection_retries=10,
+        retry_delay=2,
+    )
+    await client.connect()
+    if not await client.is_user_authorized():
+        if not bot_token:
+            print("[ERROR] BOT_TOKEN required in .env file.")
+            sys.exit(1)
+        await client.sign_in(bot_token=bot_token)
+    me = await client.get_me()
+    print(f"[CONNECTED] Authorized via Isolated Local Bot Session: @{me.username} [ID: {me.id}]")
 
     channel = await client.get_entity(channel_id)
     print(f"[TARGET] Storage channel: '{channel.title}' ({channel_id})\n")
