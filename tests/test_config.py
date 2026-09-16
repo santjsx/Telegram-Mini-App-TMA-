@@ -70,3 +70,27 @@ def test_config_valid_loading(monkeypatch):
     assert cfg.max_download_batch == 25
     assert cfg.max_search_results == 50
     assert cfg.flood_wait_max == 300
+
+
+def test_config_channel_id_auto_heal(monkeypatch):
+    """Verify that positive channel IDs are automatically normalized to negative -100..."""
+    monkeypatch.setenv("API_ID", "987654")
+    monkeypatch.setenv("API_HASH", "validhash1234567890abcdef12345678")
+    monkeypatch.setenv("BOT_TOKEN", "999999999:AAFakeTokenForTestingOnly_12345678")
+    monkeypatch.setenv("TELEGRAM_SESSION", "1BVtsOFakeValidTelethonSessionString...")
+    monkeypatch.setenv("AUTHORIZED_USER_ID", "1122334455")
+
+    # Case 1: user entered 1004316652121 without minus
+    monkeypatch.setenv("CHANNEL_ID", "1004316652121")
+    cfg1 = Config.load_from_env()
+    assert cfg1.channel_id == -1004316652121
+
+    # Case 2: user entered 4316652121 without -100
+    monkeypatch.setenv("CHANNEL_ID", "4316652121")
+    cfg2 = Config.load_from_env()
+    assert cfg2.channel_id == -1004316652121
+
+    # Case 3: user entered standard -1004316652121
+    monkeypatch.setenv("CHANNEL_ID", "-1004316652121")
+    cfg3 = Config.load_from_env()
+    assert cfg3.channel_id == -1004316652121

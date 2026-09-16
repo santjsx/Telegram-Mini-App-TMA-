@@ -100,6 +100,13 @@ class Config:
         else:
             try:
                 channel_id = int(raw_channel_id)
+                # Auto-heal: In Telegram MTProto, channel IDs are strictly negative (-100...)
+                # If user entered positive format (e.g. 1004316652121 or 4316652121), normalize to -100...
+                if channel_id > 0:
+                    if str(channel_id).startswith("100"):
+                        channel_id = -channel_id
+                    else:
+                        channel_id = -int(f"100{channel_id}")
             except ValueError:
                 errors.append(f"CHANNEL_ID must be a numeric ID (e.g. -1001234567890), received: '{raw_channel_id}'")
 
