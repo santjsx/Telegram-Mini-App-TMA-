@@ -1,0 +1,2522 @@
+# Telegram Personal Music Cloud
+
+### TPMC — Personal Music Storage, Indexing & Retrieval System
+
+**Version:** 2.0
+**Status:** Production Architecture Specification
+**Target:** Personal / Single-User System
+**Primary Runtime:** Python + Telethon
+**Hosting:** Render Free Web Service
+**Storage Backend:** Private Telegram Channel
+**Repository:** Private GitHub Repository
+**Development Environment:** Antigravity
+
+---
+
+# 1. Product Definition
+
+## 1.1 Product Name
+
+**Telegram Personal Music Cloud (TPMC)**
+
+TPMC is a personal music-management system that uses a private Telegram channel as the durable media repository and a Python service as the indexing, search, command, and delivery layer.
+
+The system is designed for one authorized owner rather than public multi-user operation.
+
+---
+
+# 2. Critical Architecture Principles
+
+TPMC MUST follow these principles:
+
+1. **Telegram is the media source of truth.**
+2. **Render filesystem is never treated as permanent storage.**
+3. **No music file is permanently stored on Render.**
+4. **No large media file is downloaded to Render unless absolutely required.**
+5. **The system should forward Telegram media whenever possible instead of downloading and re-uploading it.**
+6. **The application must survive Render restarts.**
+7. **The application must tolerate Render cold starts.**
+8. **The application must tolerate Telegram rate limits and FloodWait conditions.**
+9. **Every long-running operation must be resumable.**
+10. **Every command must be bounded to prevent accidental resource exhaustion.**
+11. **The bot must reject unauthorized users.**
+12. **Secrets must never exist in Git.**
+13. **A Render Free instance must be treated as disposable.**
+14. **The system must not depend on a fake keep-alive server to remain permanently active.**
+15. **The application must explicitly communicate free-tier limitations to the owner.**
+
+---
+
+# 3. Important Constraint Corrections
+
+## 3.1 Render is NOT a guaranteed 24/7 host
+
+Render Free services can spin down after 15 minutes without inbound traffic and may take approximately a minute to wake up.
+
+The service may also restart independently.
+
+Therefore:
+
+### Forbidden assumption
+
+```text
+Render Free = permanently running server
+```
+
+### Correct model
+
+```text
+Render Free
+     │
+     ├── Running
+     │
+     ├── Idle
+     │
+     ├── Suspended
+     │
+     └── Cold Start
+             │
+             ▼
+        Application Boot
+             │
+             ▼
+        Telegram Reconnect
+             │
+             ▼
+        Ready
+```
+
+The application must therefore be **restart-safe**, not merely "always running."
+
+---
+
+# 4. Telegram Storage Model
+
+The private Telegram channel is the canonical music repository.
+
+Example:
+
+```text
+Private Channel
+│
+├── Song A
+│   ├── Artist: A
+│   ├── Album: Album X
+│   ├── Genre: Rock
+│   └── Tags: #rock #favorite
+│
+├── Song B
+│   ├── Artist: B
+│   ├── Album: Album Y
+│   └── Tags: #telugu #2026
+│
+└── Song C
+    ├── Artist: C
+    └── Tags: #playlist1
+```
+
+The application does NOT become the storage provider.
+
+Telegram remains the storage layer.
+
+---
+
+# 5. Recommended Architecture
+
+The original architecture should be replaced with the following:
+
+```text
+                  ┌─────────────────────────┐
+                  │     Owner's Devices     │
+                  │ Mobile / Desktop / PC   │
+                  └────────────┬────────────┘
+                               │
+                         Upload Music
+                               │
+                               ▼
+                  ┌─────────────────────────┐
+                  │  Private Telegram       │
+                  │  Music Storage Channel  │
+                  │                         │
+                  │  SOURCE OF TRUTH        │
+                  └────────────┬────────────┘
+                               │
+                         MTProto API
+                               │
+                               ▼
+             ┌────────────────────────────────┐
+             │        TPMC Backend            │
+             │                                │
+             │  Telegram User Session         │
+             │  Telegram Bot Session          │
+             │  Command Router                │
+             │  Media Indexer                 │
+             │  Search Engine                 │
+             │  Job Manager                   │
+             │  Rate-Limit Manager            │
+             │  Recovery Manager              │
+             │  Health Endpoint               │
+             └───────────────┬────────────────┘
+                             │
+                             ▼
+                    Telegram Bot DM
+                             │
+                             ▼
+                    Owner's Telegram
+```
+
+---
+
+# 6. Dual Telegram Identity Architecture
+
+This is one of the most important changes.
+
+## 6.1 Bot Account
+
+Used for:
+
+* `/start`
+* `/help`
+* `/search`
+* `/download`
+* `/library`
+* `/status`
+* `/cancel`
+* progress messages
+* user interaction
+
+## 6.2 User Account / MTProto Session
+
+Used for:
+
+* reading the private storage channel
+* scanning historical messages
+* accessing media metadata
+* retrieving messages
+* performing operations unavailable or unsuitable through the Bot API
+
+This separation makes the system substantially more robust.
+
+---
+
+# 7. Telegram Session Persistence
+
+The system MUST NOT depend on:
+
+```text
+bot_session.session
+```
+
+being permanently available on Render.
+
+Render's filesystem is ephemeral.
+
+Instead:
+
+### Production approach
+
+Use a Telethon `StringSession`.
+
+Conceptually:
+
+```text
+Telegram Login
+       │
+       ▼
+StringSession
+       │
+       ▼
+Encrypted environment variable
+       │
+       ▼
+Render
+```
+
+Required secret:
+
+```text
+TELEGRAM_SESSION
+```
+
+The session must never be committed to GitHub.
+
+---
+
+# 8. Environment Configuration
+
+Required environment variables:
+
+```text
+API_ID
+API_HASH
+
+BOT_TOKEN
+
+CHANNEL_ID
+
+TELEGRAM_SESSION
+
+AUTHORIZED_USER_ID
+```
+
+Optional:
+
+```text
+LOG_LEVEL
+MAX_CONCURRENT_JOBS
+MAX_DOWNLOAD_BATCH
+MAX_SEARCH_RESULTS
+FLOOD_WAIT_MAX
+```
+
+---
+
+# 9. Security Model
+
+TPMC is a personal system.
+
+It MUST NOT behave as an unrestricted public Telegram bot.
+
+Every command must validate:
+
+```text
+event.sender_id == AUTHORIZED_USER_ID
+```
+
+If unauthorized:
+
+```text
+Access denied.
+```
+
+No channel information should be exposed.
+
+No commands should execute.
+
+No media should be sent.
+
+---
+
+# 10. Channel Access
+
+The Telegram user account used by TPMC must have access to the private storage channel.
+
+Recommended permission model:
+
+```text
+Private Channel
+      │
+      ├── Owner
+      │
+      └── TPMC User Session
+```
+
+The bot itself should not be relied upon as the sole mechanism for accessing historical media.
+
+---
+
+# 11. Media Metadata Model
+
+Every uploaded music item should have a normalized metadata representation.
+
+Conceptual object:
+
+```text
+Track
+│
+├── telegram_message_id
+├── channel_id
+├── file_id / media reference
+├── filename
+├── mime_type
+├── file_size
+├── duration
+├── performer
+├── title
+├── album
+├── genre
+├── caption
+├── tags[]
+├── upload_timestamp
+└── indexed_timestamp
+```
+
+Telegram message ID + channel ID should be treated as the primary identity.
+
+---
+
+# 12. Tagging Standard
+
+Recommended caption format:
+
+```text
+#artist:arijit_singh
+#album:animal
+#genre:bollywood
+#language:hindi
+#year:2023
+#favorite
+```
+
+Do NOT rely exclusively on free-form:
+
+```text
+#Arijit
+#BestSongs
+#MyFav
+```
+
+because inconsistent capitalization, spaces, punctuation and spelling make reliable indexing difficult.
+
+---
+
+# 13. Tag Normalization
+
+The application must normalize:
+
+```text
+#Rock
+#rock
+#ROCK
+```
+
+to:
+
+```text
+rock
+```
+
+The parser should also normalize:
+
+* whitespace
+* Unicode normalization
+* duplicate tags
+* leading/trailing punctuation
+* case
+
+---
+
+# 14. Upload Workflow
+
+User:
+
+```text
+Telegram
+   ↓
+Private Channel
+   ↓
+Upload audio
+   ↓
+Add standardized caption
+```
+
+Example:
+
+```text
+#artist:linkinpark
+#album:meteora
+#genre:rock
+#language:english
+#favorite
+```
+
+The backend eventually detects the new message and indexes its metadata.
+
+---
+
+# 15. Indexing Strategy
+
+The original design scans the entire channel for every `/download` request.
+
+That is inefficient.
+
+Example:
+
+```text
+/download #rock
+
+→ scan 20,000 messages
+→ inspect each message
+→ send matches
+```
+
+This does not scale well.
+
+Instead:
+
+```text
+Startup
+   ↓
+Load lightweight index
+   ↓
+Detect new channel messages
+   ↓
+Update index
+   ↓
+User searches
+   ↓
+Search index
+   ↓
+Retrieve Telegram messages
+```
+
+---
+
+# 16. Free-Tier Persistence Strategy
+
+Because Render Free storage is ephemeral, TPMC MUST NOT depend on a local SQLite database as the permanent source of truth.
+
+The system should be able to reconstruct its index from Telegram.
+
+Therefore:
+
+```text
+Telegram
+    ↓
+Rebuild Index
+    ↓
+Memory
+```
+
+If the process restarts:
+
+```text
+Restart
+  ↓
+Index missing
+  ↓
+Rebuild from Telegram
+  ↓
+Ready
+```
+
+---
+
+# 17. Index Rebuild Strategy
+
+Never blindly perform a full expensive scan on every startup.
+
+Use:
+
+```text
+FAST BOOT
+   ↓
+Bot available
+   ↓
+Background indexing
+   ↓
+Incremental reconstruction
+```
+
+During indexing:
+
+```text
+/status
+```
+
+should report:
+
+```text
+Library status
+
+Indexed: 8,420
+Scanned: 10,000
+Remaining: 2,000
+Status: Indexing
+```
+
+---
+
+# 18. Search Architecture
+
+Supported queries:
+
+```text
+/download rock
+/download #rock
+/download #artist:arijit_singh
+/download #genre:rock
+/download #favorite
+```
+
+Recommended additional commands:
+
+```text
+/search rock
+/search artist:arijit
+/search album:meteora
+```
+
+---
+
+# 19. Search Matching
+
+Search should support:
+
+### Exact tag
+
+```text
+#genre:rock
+```
+
+### Artist
+
+```text
+artist:linkinpark
+```
+
+### Album
+
+```text
+album:meteora
+```
+
+### General search
+
+```text
+rock
+```
+
+The search engine should prioritize structured metadata over arbitrary substring matching.
+
+---
+
+# 20. Download / Delivery Architecture
+
+The word "download" is misleading.
+
+The backend should primarily perform:
+
+```text
+Telegram message
+      ↓
+Forward / send media
+      ↓
+Owner DM
+```
+
+rather than:
+
+```text
+Telegram
+   ↓
+Render
+   ↓
+temporary file
+   ↓
+Render upload
+   ↓
+Telegram
+```
+
+The second architecture wastes Render bandwidth and memory.
+
+---
+
+# 21. Large File Handling
+
+The application MUST detect file size before attempting delivery.
+
+Conceptual logic:
+
+```text
+File detected
+    ↓
+Check size
+    │
+    ├── Supported
+    │      ↓
+    │    Deliver
+    │
+    └── Unsupported
+           ↓
+       Don't retry forever
+           ↓
+       Explain limitation
+```
+
+The Bot API currently documents a 50 MB sending limit for bots. Therefore the PRD must NOT claim that a bot can reliably DM every 2 GB Telegram file.
+
+If large-file delivery is required, the implementation should use the MTProto architecture where technically appropriate and validate actual Telegram limits during integration testing.
+
+---
+
+# 22. Delivery Modes
+
+TPMC should support:
+
+### Mode A — Forward
+
+Preferred.
+
+```text
+Storage Channel
+       ↓
+Forward
+       ↓
+Owner DM
+```
+
+Advantages:
+
+* no local file
+* lower Render resource usage
+* faster
+* less bandwidth pressure
+
+### Mode B — Telegram-side copy/send
+
+Used where forwarding semantics are undesirable.
+
+### Mode C — Download/re-upload
+
+Last resort only.
+
+This mode should be disabled by default.
+
+---
+
+# 23. Bulk Download Protection
+
+Never allow:
+
+```text
+/download_all
+```
+
+to blindly send thousands of files without limits.
+
+Instead:
+
+```text
+/download_all
+```
+
+should respond:
+
+```text
+Your library contains 8,420 tracks.
+
+This operation will send 8,420 messages.
+
+Use:
+
+/download_all confirm
+```
+
+Then:
+
+```text
+/download_all confirm
+```
+
+starts the job.
+
+---
+
+# 24. Batch Processing
+
+Bulk delivery must be chunked.
+
+Example:
+
+```text
+Batch 1
+1–25
+
+Batch 2
+26–50
+
+Batch 3
+51–75
+```
+
+The exact batch size should be configurable.
+
+---
+
+# 25. Rate Limiting
+
+Never assume:
+
+```text
+sleep(1.5)
+```
+
+is sufficient protection.
+
+Telegram may return:
+
+```text
+FloodWait
+429
+network timeout
+connection reset
+```
+
+The system must handle Telegram-provided wait durations dynamically.
+
+Conceptual algorithm:
+
+```text
+send message
+    ↓
+success → continue
+
+FloodWait
+    ↓
+read server wait duration
+    ↓
+wait
+    ↓
+retry
+
+temporary network failure
+    ↓
+exponential backoff
+    ↓
+retry
+
+permanent failure
+    ↓
+record failure
+    ↓
+continue job
+```
+
+Telegram's own bot documentation also warns about per-chat message-rate limitations.
+
+---
+
+# 26. Job System
+
+Every bulk operation is a job.
+
+Example:
+
+```text
+Job
+│
+├── ID
+├── Owner
+├── Type
+├── Query
+├── Total
+├── Completed
+├── Failed
+├── Status
+├── Started
+└── Updated
+```
+
+Statuses:
+
+```text
+QUEUED
+RUNNING
+PAUSED
+COMPLETED
+FAILED
+CANCELLED
+```
+
+---
+
+# 27. Job Cancellation
+
+Required command:
+
+```text
+/cancel
+```
+
+The current operation should stop gracefully.
+
+It must NOT kill the entire process.
+
+---
+
+# 28. Progress Reporting
+
+For large operations:
+
+```text
+🎵 Download Job
+
+Progress: 127 / 500
+████████░░░░░░░░
+
+Sent: 124
+Skipped: 2
+Failed: 1
+
+Status: Running
+```
+
+Do not edit the progress message on every single track.
+
+Use throttled progress updates.
+
+---
+
+# 29. Resume Support
+
+If Render restarts during:
+
+```text
+/download_all
+```
+
+the operation must not corrupt the system.
+
+At minimum:
+
+```text
+Job interrupted.
+
+Render restarted.
+
+Please run:
+ /download_all resume
+```
+
+A stronger implementation can maintain lightweight job state externally or encode enough state to reconstruct progress from Telegram message IDs.
+
+---
+
+# 30. Duplicate Protection
+
+The system must avoid accidentally sending duplicate tracks during retries.
+
+Track identity:
+
+```text
+channel_id + message_id
+```
+
+Before delivery:
+
+```text
+already completed?
+      │
+      ├── YES → skip
+      │
+      └── NO → send
+```
+
+---
+
+# 31. Error Classification
+
+Errors must be divided into:
+
+### Recoverable
+
+```text
+FloodWait
+Timeout
+Temporary network failure
+Telegram reconnect
+Render restart
+```
+
+### Non-recoverable
+
+```text
+Message deleted
+Invalid channel
+Unauthorized session
+Invalid credentials
+Unsupported media
+Forbidden access
+```
+
+### User errors
+
+```text
+Invalid command
+Unknown tag
+Unauthorized user
+Invalid confirmation
+```
+
+---
+
+# 32. Retry Policy
+
+Never use infinite retries.
+
+Example conceptual policy:
+
+```text
+Attempt 1
+Attempt 2
+Attempt 3
+       ↓
+Failure
+       ↓
+Record error
+       ↓
+Continue
+```
+
+FloodWait is special:
+
+```text
+FloodWait(n)
+       ↓
+wait n seconds
+       ↓
+retry
+```
+
+---
+
+# 33. Telegram Connection Manager
+
+The application needs a centralized connection layer.
+
+Responsibilities:
+
+* connect
+* reconnect
+* detect disconnect
+* re-authenticate when possible
+* handle session errors
+* expose connection state
+* prevent multiple competing Telegram connections
+
+State:
+
+```text
+DISCONNECTED
+CONNECTING
+CONNECTED
+RECONNECTING
+AUTH_FAILED
+```
+
+---
+
+# 34. Bot Command Layer
+
+Recommended commands:
+
+```text
+/start
+/help
+/status
+/library
+/search <query>
+/download <query>
+/download_all
+/download_all confirm
+/cancel
+/reindex
+```
+
+---
+
+# 35. `/start`
+
+Should display:
+
+```text
+🎵 TPMC
+
+Your personal Telegram Music Cloud.
+
+Commands:
+
+/library
+/search <query>
+/download <query>
+/download_all
+/status
+/reindex
+/cancel
+/help
+```
+
+---
+
+# 36. `/library`
+
+Display:
+
+```text
+Music Library
+
+Tracks: 8,420
+Artists: 624
+Albums: 912
+Genres: 27
+
+Index:
+READY
+```
+
+---
+
+# 37. `/status`
+
+Display:
+
+```text
+TPMC Status
+
+Telegram: Connected
+Bot: Online
+Index: Ready
+Tracks: 8,420
+Active Job: None
+Render: Active
+```
+
+If Render has just restarted:
+
+```text
+Telegram: Connecting
+Index: Rebuilding
+```
+
+---
+
+# 38. `/reindex`
+
+Manual full index rebuild.
+
+Must require confirmation:
+
+```text
+This will scan the Telegram storage channel.
+
+Continue?
+
+/reindex confirm
+```
+
+---
+
+# 39. Health Endpoint
+
+A minimal HTTP server is still useful.
+
+Example endpoint conceptually:
+
+```text
+GET /
+```
+
+Response:
+
+```text
+TPMC ONLINE
+```
+
+And:
+
+```text
+GET /health
+```
+
+Response:
+
+```json
+{
+  "status": "ok",
+  "telegram": "connected",
+  "bot": "connected",
+  "index": "ready"
+}
+```
+
+The health endpoint is for monitoring and Render's health checks.
+
+It is NOT a keep-alive mechanism.
+
+---
+
+# 40. Render Configuration
+
+The application must bind to:
+
+```text
+0.0.0.0:$PORT
+```
+
+Do not hard-code:
+
+```text
+8080
+```
+
+as the only supported port.
+
+Render expects the web service to listen on the configured port and `0.0.0.0`.
+
+---
+
+# 41. Render Blueprint
+
+The final Render configuration should conceptually contain:
+
+```text
+Web Service
+Python
+Free
+Health Check
+Environment Variables
+Automatic Deploy
+```
+
+Use a health check such as:
+
+```text
+/health
+```
+
+Render's Blueprint specification supports a `healthCheckPath` for web services.
+
+---
+
+# 42. Render Free-Tier Reality
+
+The system must explicitly tolerate:
+
+```text
+15-minute idle spin-down
+Cold starts
+Instance restarts
+Ephemeral filesystem
+Limited CPU
+Limited RAM
+Outbound bandwidth limitations
+750 monthly instance hours
+```
+
+Render documents these limitations for Free services.
+
+Therefore the application cannot promise:
+
+```text
+24/7 guaranteed uptime
+zero cold starts
+unlimited bandwidth
+unlimited compute
+zero downtime
+```
+
+---
+
+# 43. Keep-Alive Design
+
+Do NOT implement:
+
+```text
+while True:
+    requests.get(my-render-url)
+```
+
+inside the application.
+
+That is circular and does not solve the actual free-tier lifecycle problem.
+
+External traffic may wake a sleeping service, but the application itself should remain correct when Render suspends it.
+
+---
+
+# 44. Startup Sequence
+
+When Render starts:
+
+```text
+Process Start
+     ↓
+Load environment
+     ↓
+Validate configuration
+     ↓
+Start HTTP server
+     ↓
+Initialize Telegram client
+     ↓
+Connect bot
+     ↓
+Connect user session
+     ↓
+Validate channel
+     ↓
+Load/rebuild index
+     ↓
+Register handlers
+     ↓
+READY
+```
+
+---
+
+# 45. Configuration Validation
+
+The application must fail immediately if:
+
+```text
+API_ID missing
+API_HASH missing
+BOT_TOKEN missing
+CHANNEL_ID missing
+TELEGRAM_SESSION missing
+AUTHORIZED_USER_ID missing
+```
+
+Do not silently fall back to fake defaults such as:
+
+```text
+1234567
+your_api_hash_here
+```
+
+That is development-only behavior and is inappropriate for production.
+
+---
+
+# 46. Secret Handling
+
+Never commit:
+
+```text
+.env
+.session
+*.session
+BOT_TOKEN
+API_HASH
+TELEGRAM_SESSION
+```
+
+Recommended `.gitignore`:
+
+```text
+.env
+*.session
+__pycache__/
+*.pyc
+.venv/
+```
+
+---
+
+# 47. Logging
+
+Logs should contain:
+
+```text
+timestamp
+severity
+component
+event
+job_id
+message_id
+```
+
+Example:
+
+```text
+INFO  Telegram connected
+INFO  Channel validated
+INFO  Index rebuild started
+INFO  Track indexed message=4821
+WARN  FloodWait seconds=17
+ERROR Delivery failed message=9182
+```
+
+Never log:
+
+```text
+BOT_TOKEN
+API_HASH
+TELEGRAM_SESSION
+```
+
+---
+
+# 48. Observability
+
+Required metrics:
+
+```text
+tracks_indexed
+tracks_failed
+jobs_completed
+jobs_failed
+messages_sent
+flood_wait_count
+telegram_reconnect_count
+index_duration
+startup_duration
+```
+
+---
+
+# 49. Graceful Shutdown
+
+When Render terminates the process:
+
+```text
+SIGTERM
+   ↓
+Stop accepting new jobs
+   ↓
+Finish safe current operation if possible
+   ↓
+Disconnect Telegram
+   ↓
+Close HTTP server
+   ↓
+Exit
+```
+
+Do not abruptly kill running coroutines.
+
+Render supports configurable shutdown delay for services, so graceful termination should be part of the design.
+
+---
+
+# 50. Media Validation
+
+Only process supported audio:
+
+```text
+audio/*
+```
+
+and known audio extensions where MIME metadata is unavailable.
+
+Examples:
+
+```text
+.mp3
+.m4a
+.flac
+.wav
+.ogg
+.opus
+.aac
+```
+
+Do not assume every Telegram document is audio.
+
+---
+
+# 51. Corrupt Media
+
+If metadata is malformed:
+
+```text
+Do not crash indexer.
+```
+
+Instead:
+
+```text
+Track
+Status: INVALID_METADATA
+```
+
+Continue indexing other tracks.
+
+---
+
+# 52. Deleted Messages
+
+If a previously indexed Telegram message is deleted:
+
+```text
+Search result
+      ↓
+Message unavailable
+      ↓
+Remove/stale-mark index entry
+      ↓
+Continue
+```
+
+---
+
+# 53. Missing Captions
+
+A track without a caption must still be indexed.
+
+Example:
+
+```text
+filename: song.mp3
+tags: []
+```
+
+It should be searchable by filename and Telegram audio metadata.
+
+---
+
+# 54. Filename Metadata
+
+Fallback hierarchy:
+
+```text
+Caption metadata
+       ↓
+Telegram audio metadata
+       ↓
+Filename
+       ↓
+Unknown
+```
+
+---
+
+# 55. Duplicate Tracks
+
+Duplicates must not crash indexing.
+
+Recommended identity hierarchy:
+
+```text
+Telegram message ID
+```
+
+for storage identity.
+
+Optionally calculate a content hash only when technically practical.
+
+Do NOT download every large file simply to calculate hashes.
+
+---
+
+# 56. Memory Management
+
+Never load the entire channel media into memory.
+
+Bad:
+
+```text
+all_messages = list(iter_messages(...))
+```
+
+Preferred:
+
+```text
+stream messages
+process one
+discard temporary object
+continue
+```
+
+---
+
+# 57. Concurrency
+
+Do not create hundreds of simultaneous Telegram operations.
+
+Use a bounded queue:
+
+```text
+MAX_CONCURRENT_OPERATIONS = small fixed number
+```
+
+For a single-user personal application, conservative concurrency is preferable to aggressive throughput.
+
+---
+
+# 58. Backpressure
+
+If the owner requests:
+
+```text
+/download_all
+```
+
+while another large job is running:
+
+```text
+Reject / queue second job
+```
+
+Do not run unlimited jobs simultaneously.
+
+---
+
+# 59. Command Collision Handling
+
+Example:
+
+```text
+Job A: /download #rock
+Job B: /download #telugu
+```
+
+The bot should respond:
+
+```text
+A music delivery job is already running.
+
+Use /status or /cancel.
+```
+
+---
+
+# 60. Free-Tier Bandwidth Protection
+
+Render outbound bandwidth is a real constraint.
+
+Therefore TPMC should avoid:
+
+```text
+download Telegram file
+→ upload to Telegram
+```
+
+whenever forwarding/copying can achieve the desired result.
+
+The application should not proxy music through Render.
+
+---
+
+# 61. No Local Music Cache
+
+Do NOT build:
+
+```text
+Telegram
+ ↓
+Render disk
+ ↓
+Music cache
+```
+
+because Render Free storage is ephemeral.
+
+Instead:
+
+```text
+Telegram
+ ↓
+metadata/index
+ ↓
+Telegram delivery
+```
+
+---
+
+# 62. Library Reconstruction
+
+After restart:
+
+```text
+Application starts
+      ↓
+Check index
+      ↓
+If unavailable/stale
+      ↓
+Rebuild
+      ↓
+Become fully ready
+```
+
+The bot should remain responsive during rebuilding.
+
+---
+
+# 63. Degraded Mode
+
+If Telegram indexing is still running:
+
+```text
+/status
+```
+
+works.
+
+```text
+/help
+```
+
+works.
+
+But:
+
+```text
+/download
+```
+
+may return:
+
+```text
+Library index is still rebuilding.
+
+Indexed: 5,200 / estimated 8,420
+```
+
+---
+
+# 64. Cold Start UX
+
+When Render wakes:
+
+```text
+Telegram bot may take time to become available.
+```
+
+The system must not interpret cold-start delay as permanent failure.
+
+---
+
+# 65. Telegram Authentication Failure
+
+If:
+
+```text
+TELEGRAM_SESSION
+```
+
+is invalid:
+
+```text
+FATAL:
+Telegram session authentication failed.
+
+Verify TELEGRAM_SESSION.
+```
+
+The service should fail clearly instead of repeatedly hammering Telegram.
+
+---
+
+# 66. Bot Token Failure
+
+If bot authentication fails:
+
+```text
+FATAL:
+BOT_TOKEN authentication failed.
+```
+
+No endless retry loop.
+
+---
+
+# 67. Channel Validation
+
+At startup:
+
+```text
+Can session access CHANNEL_ID?
+```
+
+If not:
+
+```text
+FATAL:
+Storage channel unavailable.
+
+Verify:
+- CHANNEL_ID
+- Telegram account membership
+- channel permissions
+```
+
+---
+
+# 68. Command Parsing
+
+Never use fragile substring matching such as:
+
+```text
+tag_filter in caption
+```
+
+because:
+
+```text
+#rock
+```
+
+could accidentally match unrelated content.
+
+Instead tokenize and normalize tags.
+
+---
+
+# 69. Search Result Limits
+
+Never return unlimited results immediately.
+
+Default:
+
+```text
+50 results
+```
+
+Then pagination:
+
+```text
+Next
+```
+
+or:
+
+```text
+/download #rock page:2
+```
+
+---
+
+# 70. Pagination
+
+For example:
+
+```text
+/search #rock
+
+Found 420 tracks.
+
+Showing 1–50.
+
+[Next]
+```
+
+---
+
+# 71. Library Statistics
+
+Useful statistics:
+
+```text
+Total tracks
+Total artists
+Total albums
+Total genres
+Largest file
+Total indexed messages
+Last index time
+```
+
+Do not claim exact total storage size unless it has actually been calculated.
+
+---
+
+# 72. Admin-Only Operations
+
+These operations require confirmation:
+
+```text
+/reindex
+/download_all
+```
+
+Potentially:
+
+```text
+/library_refresh
+```
+
+---
+
+# 73. UX Philosophy
+
+The bot should behave like a small private music cloud rather than a developer debugging interface.
+
+Avoid:
+
+```text
+Scanning iterator...
+Message ID 98217...
+Telethon exception...
+```
+
+Owner-facing messages should be human-readable.
+
+---
+
+# 74. Error UX
+
+Instead of:
+
+```text
+RPCError 420 FLOOD_WAIT
+```
+
+show:
+
+```text
+Telegram temporarily rate-limited this operation.
+
+TPMC will retry automatically.
+```
+
+Technical details belong in logs.
+
+---
+
+# 75. Project Structure
+
+Do NOT keep everything inside `bot.py`.
+
+Recommended production structure:
+
+```text
+tpmc/
+│
+├── app/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── telegram/
+│   │   ├── bot.py
+│   │   ├── user_client.py
+│   │   └── connection.py
+│   │
+│   ├── commands/
+│   │   ├── start.py
+│   │   ├── search.py
+│   │   ├── download.py
+│   │   ├── status.py
+│   │   └── admin.py
+│   │
+│   ├── index/
+│   │   ├── parser.py
+│   │   ├── indexer.py
+│   │   └── search.py
+│   │
+│   ├── jobs/
+│   │   ├── manager.py
+│   │   ├── delivery.py
+│   │   └── retry.py
+│   │
+│   ├── health/
+│   │   └── server.py
+│   │
+│   └── main.py
+│
+├── tests/
+│   ├── test_parser.py
+│   ├── test_search.py
+│   ├── test_commands.py
+│   └── test_jobs.py
+│
+├── requirements.txt
+├── render.yaml
+├── .gitignore
+├── README.md
+└── LICENSE
+```
+
+---
+
+# 76. Dependency Strategy
+
+Pin production dependencies.
+
+Example:
+
+```text
+telethon
+```
+
+with a tested version.
+
+Do not blindly install:
+
+```text
+telethon
+latest
+```
+
+in production without testing.
+
+Dependencies should be upgraded deliberately.
+
+---
+
+# 77. Testing Strategy
+
+The application must be tested in layers.
+
+## Unit tests
+
+Test:
+
+```text
+tag parser
+metadata parser
+query parser
+authorization
+pagination
+job state
+retry logic
+```
+
+## Integration tests
+
+Test:
+
+```text
+Telegram authentication
+channel access
+message retrieval
+media forwarding
+FloodWait handling
+reconnection
+```
+
+## Deployment tests
+
+Test:
+
+```text
+Render cold start
+Render restart
+environment variables
+health endpoint
+SIGTERM
+Telegram reconnect
+index rebuild
+```
+
+---
+
+# 78. Failure Injection
+
+Antigravity should deliberately simulate:
+
+```text
+Telegram disconnect
+FloodWait
+missing channel
+deleted message
+invalid tag
+empty library
+huge library
+duplicate command
+Render restart
+corrupt metadata
+invalid session
+invalid bot token
+```
+
+The application is not production-ready until these cases have deterministic behavior.
+
+---
+
+# 79. Acceptance Criteria
+
+TPMC is considered release-ready only if:
+
+### Authentication
+
+* [ ] Bot authenticates
+* [ ] User session authenticates
+* [ ] Unauthorized users rejected
+* [ ] Secrets not logged
+
+### Storage
+
+* [ ] Channel accessible
+* [ ] Audio messages detected
+* [ ] Documents containing audio detected
+* [ ] Missing captions handled
+
+### Index
+
+* [ ] Index builds
+* [ ] Index survives application restart logically
+* [ ] Index can be reconstructed from Telegram
+* [ ] Duplicate messages do not corrupt index
+
+### Search
+
+* [ ] Exact tag search
+* [ ] Artist search
+* [ ] Album search
+* [ ] Filename search
+* [ ] Pagination
+
+### Delivery
+
+* [ ] Single track delivery
+* [ ] Multiple track delivery
+* [ ] Rate-limit handling
+* [ ] Retry handling
+* [ ] Failed track isolation
+* [ ] Job cancellation
+
+### Reliability
+
+* [ ] Telegram reconnect
+* [ ] Render restart
+* [ ] Cold start
+* [ ] Graceful shutdown
+* [ ] No dependency on local persistent storage
+
+### Security
+
+* [ ] Private GitHub repository
+* [ ] Secrets in Render environment
+* [ ] `.env` ignored
+* [ ] Session files ignored
+* [ ] Authorization enforced
+
+---
+
+# 80. Recommended Command Specification
+
+```text
+/start
+```
+
+Initialize and display the system.
+
+```text
+/help
+```
+
+Show command documentation.
+
+```text
+/status
+```
+
+Show system and indexing state.
+
+```text
+/library
+```
+
+Show library statistics.
+
+```text
+/search <query>
+```
+
+Search without sending media.
+
+```text
+/download <query>
+```
+
+Search and deliver matching media.
+
+```text
+/download_all
+```
+
+Show confirmation.
+
+```text
+/download_all confirm
+```
+
+Start complete delivery.
+
+```text
+/cancel
+```
+
+Cancel active delivery job.
+
+```text
+/reindex
+```
+
+Show reindex confirmation.
+
+```text
+/reindex confirm
+```
+
+Rebuild index.
+
+---
+
+# 81. Example User Workflow
+
+## Beginner Example
+
+User uploads:
+
+```text
+Blinding Lights.mp3
+```
+
+Caption:
+
+```text
+#artist:theweeknd
+#genre:pop
+#favorite
+```
+
+Then sends:
+
+```text
+/download #favorite
+```
+
+TPMC:
+
+```text
+🔎 Searching your library...
+
+Found 18 tracks.
+
+Sending tracks...
+```
+
+Then delivers the matching Telegram media.
+
+---
+
+# 82. Advanced Example
+
+User sends:
+
+```text
+/search artist:theweeknd
+```
+
+TPMC:
+
+```text
+The Weeknd
+
+42 tracks found.
+
+1. Blinding Lights
+2. Starboy
+3. Save Your Tears
+...
+
+Page 1 / 5
+```
+
+User selects:
+
+```text
+Download page
+```
+
+The job manager begins delivery while respecting Telegram limits.
+
+---
+
+# 83. Deployment Pipeline
+
+Recommended:
+
+```text
+Antigravity
+     ↓
+Local validation
+     ↓
+Unit tests
+     ↓
+Git commit
+     ↓
+Private GitHub
+     ↓
+Render
+     ↓
+Build
+     ↓
+Deploy
+     ↓
+Health check
+     ↓
+Telegram connection
+     ↓
+Production
+```
+
+---
+
+# 84. Antigravity Development Instructions
+
+Antigravity should NOT generate the entire project blindly in one pass.
+
+Build in phases.
+
+## Phase 1
+
+Generate:
+
+```text
+project structure
+configuration system
+logging
+health endpoint
+```
+
+Test.
+
+## Phase 2
+
+Implement:
+
+```text
+Telegram bot
+authorization
+/start
+/help
+/status
+```
+
+Test.
+
+## Phase 3
+
+Implement:
+
+```text
+user MTProto session
+channel validation
+```
+
+Test.
+
+## Phase 4
+
+Implement:
+
+```text
+metadata parser
+tag normalization
+indexer
+```
+
+Test.
+
+## Phase 5
+
+Implement:
+
+```text
+search engine
+pagination
+```
+
+Test.
+
+## Phase 6
+
+Implement:
+
+```text
+delivery engine
+rate limiting
+retry handling
+```
+
+Test.
+
+## Phase 7
+
+Implement:
+
+```text
+job manager
+cancel
+resume
+progress
+```
+
+Test.
+
+## Phase 8
+
+Implement:
+
+```text
+Render deployment
+graceful shutdown
+restart recovery
+```
+
+Test.
+
+---
+
+# 85. Antigravity Quality Gate
+
+Before changing existing code, Antigravity must:
+
+1. Inspect the repository.
+2. Understand existing architecture.
+3. Identify dependencies.
+4. Identify stateful components.
+5. Identify Telegram API boundaries.
+6. Identify free-tier limitations.
+7. Make the smallest safe architectural change.
+8. Run tests.
+9. Check logs.
+10. Only then modify the next component.
+
+Never rewrite working components unnecessarily.
+
+---
+
+# 86. Definition of "No Bugs"
+
+The project must NOT use the phrase:
+
+```text
+zero bugs guaranteed
+```
+
+Instead use:
+
+```text
+production acceptance criteria
+```
+
+because external systems such as Telegram and Render can change behavior outside the application's control.
+
+---
+
+# 87. Definition of "Unlimited"
+
+TPMC may conceptually use Telegram as a large personal media repository, but:
+
+```text
+Unlimited storage
+≠
+Unlimited compute
+≠
+Unlimited bandwidth
+≠
+Unlimited bot delivery
+≠
+Unlimited Render runtime
+```
+
+These must remain separate concepts.
+
+---
+
+# 88. Free-Tier Architecture
+
+The correct goal is:
+
+> **Zero mandatory infrastructure cost for a personal hobby deployment, subject to Telegram, Render, bandwidth, API and platform limits.**
+
+Not:
+
+> "Unlimited free production cloud."
+
+Render itself describes Free instances as intended for testing, hobby projects and previews rather than production workloads.
+
+---
+
+# 89. Final Architecture
+
+```text
+                         OWNER
+                           │
+             ┌─────────────┴─────────────┐
+             │                           │
+        Telegram App                TPMC Bot
+             │                           │
+             ▼                           ▼
+    ┌──────────────────┐       ┌────────────────────┐
+    │ Private Channel  │◄──────│ Python TPMC        │
+    │                  │ MTProto│                    │
+    │ Music Repository │       │ Bot Client         │
+    └────────┬─────────┘       │ User Client        │
+             │                 │ Indexer            │
+             │                 │ Search Engine      │
+             │                 │ Job Manager        │
+             │                 │ Delivery Engine    │
+             │                 │ Retry Manager      │
+             │                 └──────────┬─────────┘
+             │                            │
+             └────────────────────────────┘
+                                          │
+                                          ▼
+                                  Owner Telegram DM
+```
+
+---
+
+# 90. Production Definition
+
+TPMC is production-ready when:
+
+```text
+Telegram
+    +
+MTProto
+    +
+Bot Interface
+    +
+Persistent Session Secret
+    +
+Reconstructable Index
+    +
+Bounded Job System
+    +
+Rate-Limit Handling
+    +
+Restart Recovery
+    +
+Render Health Endpoint
+    +
+Strict Authorization
+```
+
+all work together without relying on Render's local filesystem or permanent process lifetime.
+
+---
+
+# 91. Non-Goals
+
+TPMC is NOT:
+
+* a public music streaming service
+* a multi-user SaaS
+* a Spotify replacement
+* a permanent CDN
+* an unlimited-bandwidth proxy
+* a guaranteed 24/7 service
+* a commercial music distribution platform
+* a backup system with independent redundancy
+
+Telegram remains the primary storage dependency.
+
+---
+
+# 92. Final Engineering Rule
+
+The single most important architectural rule is:
+
+```text
+NEVER make Render responsible for the existence of the music.
+```
+
+Render is disposable.
+
+Telegram is the source of truth.
+
+If Render disappears:
+
+```text
+Music remains safe in Telegram.
+```
+
+When Render returns:
+
+```text
+Reconnect
+   ↓
+Rebuild state
+   ↓
+Continue
+```
+
+That is the architecture that makes this project resilient rather than merely functional.

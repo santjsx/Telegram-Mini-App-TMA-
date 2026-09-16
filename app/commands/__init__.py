@@ -1,0 +1,3 @@
+"""
+Bot commands package
+"""

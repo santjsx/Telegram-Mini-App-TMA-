@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Music Cloud • TPMC ONLINE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body class="dark-theme">
+  <!-- Top Background Ambient Glow -->
+  <div class="ambient-glow" id="ambient-glow"></div>
+
+  <!-- App Wrapper -->
+  <div class="app-container" id="app-container">
+
+    <!-- ==================== SCREEN 1: DISCOVER ==================== -->
+    <main class="view-screen active" id="discover-view">
+      
+      <!-- Top Navigation Header -->
+      <header class="top-header">
+        <div class="header-left">
+          <h1 class="header-title">Discover</h1>
+        </div>
+        <div class="header-actions">
+          <button class="icon-btn" id="btn-settings" aria-label="Settings">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
+          <button class="icon-btn has-dot" id="btn-notifications" aria-label="Notifications">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            <span class="notification-dot"></span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Pill Search Bar -->
+      <div class="search-section">
+        <div class="search-pill">
+          <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="search-input" placeholder="Search your songs, artists, albums..." autocomplete="off" autocorrect="off">
+          <button class="clear-search-btn" id="btn-clear-search" style="display: none;">✕</button>
+          <button class="filter-icon-btn" id="btn-filter" aria-label="Filters">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="4" y1="21" x2="4" y2="14"></line>
+              <line x1="4" y1="10" x2="4" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12" y2="3"></line>
+              <line x1="20" y1="21" x2="20" y2="16"></line>
+              <line x1="20" y1="12" x2="20" y2="3"></line>
+              <line x1="1" y1="14" x2="7" y2="14"></line>
+              <line x1="9" y1="8" x2="15" y2="8"></line>
+              <line x1="17" y1="16" x2="23" y2="16"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="filter-chips" id="filter-chips">
+          <button class="chip active" data-filter="all">All Tracks</button>
+          <button class="chip" data-filter="lossless">FLAC Lossless</button>
+          <button class="chip" data-filter="favorites">⭐ Favorites</button>
+          <button class="chip" data-filter="artists">🎤 Artists</button>
+        </div>
+      </div>
+
+      <!-- Scrollable Main Content -->
+      <div class="discover-scroll-content">
+
+        <!-- Hero Featured Card -->
+        <section class="hero-section" id="hero-section">
+          <div class="hero-card" id="hero-card">
+            <div class="hero-backdrop" id="hero-backdrop"></div>
+            <div class="hero-pill-overlay">
+              <div class="hero-text-content">
+                <h3 class="hero-song-title" id="hero-title">Loading Music...</h3>
+                <p class="hero-artist-name" id="hero-artist">Your Private Cloud</p>
+              </div>
+              <button class="hero-play-btn" id="hero-play-btn" aria-label="Play Featured">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Horizontal Carousel: Made For You (Albums) -->
+        <section class="section-container" id="albums-section">
+          <div class="section-header">
+            <h2 class="section-title">Made For You</h2>
+            <button class="see-all-btn" id="see-all-albums">See All</button>
+          </div>
+          <div class="horizontal-carousel" id="albums-carousel">
+            <!-- Dynamic Album Cards injected by app.js -->
+            <div class="carousel-placeholder">Loading albums...</div>
+          </div>
+        </section>
+
+        <!-- Vertical Tracklist: New Releases / All Tracks -->
+        <section class="section-container" id="tracks-section">
+          <div class="section-header">
+            <h2 class="section-title">New Releases</h2>
+            <span class="track-count-badge" id="track-count-badge">10 Tracks</span>
+          </div>
+          <div class="tracklist" id="tracklist-container">
+            <!-- Dynamic Track Items injected by app.js -->
+            <div class="tracklist-placeholder">Loading songs...</div>
+          </div>
+        </section>
+
+        <div class="bottom-spacer"></div>
+      </div>
+    </main>
+        <!-- ==================== FLOATING MINI PLAYER ==================== -->
+    <div class="mini-player" id="mini-player" style="display: none;">
+      <div class="mini-player-bar" id="mini-player-bar">
+        <div class="mini-thumbnail" id="mini-thumbnail">
+          <img class="mini-thumb-img" id="mini-thumb-img" src="/static/default_cover.svg" alt="Cover">
+          <div class="vinyl-core"></div>
+        </div>
+        <div class="mini-info">
+          <p class="mini-title" id="mini-title">Not Playing</p>
+          <p class="mini-artist" id="mini-artist">Select a song</p>
+        </div>
+        <div class="mini-controls">
+          <button class="mini-btn" id="mini-btn-play" aria-label="Play/Pause">
+            <svg class="play-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <svg class="pause-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+              <rect x="6" y="4" width="4" height="16"></rect>
+              <rect x="14" y="4" width="4" height="16"></rect>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <!-- Progress Line on top of mini player -->
+      <div class="mini-progress-track">
+        <div class="mini-progress-fill" id="mini-progress-fill"></div>
+      </div>
+    </div>
+
+    <!-- ==================== FLOATING BOTTOM DOCK ==================== -->
+    <nav class="floating-dock" id="floating-dock">
+      <div class="nav-item active" data-tab="discover">
+        <svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"></rect>
+          <rect x="14" y="3" width="7" height="7"></rect>
+          <rect x="14" y="14" width="7" height="7"></rect>
+          <rect x="3" y="14" width="7" height="7"></rect>
+        </svg>
+        <span class="nav-label">Browser</span>
+      </div>
+
+      <div class="nav-item" data-tab="artists">
+        <svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+        <span class="nav-label">Artist</span>
+      </div>
+
+      <!-- Elevated Floating Glowing Center Action Button -->
+      <div class="nav-center-wrap">
+        <button class="nav-center-btn" id="nav-center-action" aria-label="Now Playing">
+          <div class="nav-center-inner">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+          </div>
+        </button>
+      </div>
+
+      <div class="nav-item" data-tab="albums">
+        <svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 18V5l12-2v13"></path>
+          <circle cx="6" cy="18" r="3"></circle>
+          <circle cx="18" cy="16" r="3"></circle>
+        </svg>
+        <span class="nav-label">Playlist</span>
+      </div>
+
+      <div class="nav-item" data-tab="favorites">
+        <svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+        <span class="nav-label">My Music</span>
+      </div>
+    </nav>
+
+    <!-- ==================== SCREEN 2: NOW PLAYING OVERLAY ==================== -->
+    <div class="now-playing-overlay" id="now-playing-overlay">
+      
+      <!-- Top Actions -->
+      <header class="player-top-header">
+        <button class="icon-btn" id="btn-collapse-player" aria-label="Minimize Player">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+        <div class="player-context-title" id="player-context">Now Playing</div>
+        <button class="icon-btn" id="btn-share" aria-label="Share">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3"></circle>
+            <circle cx="6" cy="12" r="3"></circle>
+            <circle cx="18" cy="19" r="3"></circle>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+          </svg>
+        </button>
+      </header>
+
+      <!-- Radial Circular Player Container -->
+      <div class="radial-player-container">
+        <div class="radial-arc-wrapper" id="radial-wrapper">
+          <!-- Concentric SVG Dial Gauge -->
+          <svg class="radial-svg" viewBox="0 0 320 320">
+            <!-- Outer Tick Marks Ring -->
+            <circle class="radial-track-outer" cx="160" cy="160" r="148"></circle>
+            <circle class="radial-track-bg" cx="160" cy="160" r="132"></circle>
+            <circle class="radial-track-progress" id="radial-progress-circle" cx="160" cy="160" r="132"></circle>
+          </svg>
+
+          <!-- Volume Icons embedded in the arc -->
+          <div class="arc-icon arc-mute">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <line x1="23" y1="9" x2="17" y2="15"></line>
+              <line x1="17" y1="9" x2="23" y2="15"></line>
+            </svg>
+          </div>
+          <div class="arc-icon arc-loud">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+          </div>
+
+          <!-- Circular Vinyl Disc with Rotating Album Art -->
+          <div class="vinyl-disc" id="vinyl-disc">
+            <div class="vinyl-grooves"></div>
+            <div class="vinyl-artwork" id="vinyl-artwork">
+              <img class="vinyl-artwork-img" id="vinyl-artwork-img" src="/static/default_cover.svg" alt="Album Cover">
+              <div class="vinyl-center-pin"></div>
+            </div>
+          </div>
+
+          <!-- Glowing Radial Progress Thumb Handle -->
+          <div class="radial-thumb" id="radial-thumb"></div>
+        </div>
+      </div>
+
+      <!-- Track Identification & Action Buttons -->
+      <div class="player-info-section">
+        <div class="stream-badge">
+          <span class="format-badge" id="player-format-badge">FLAC LOSSLESS</span>
+          <span class="filesize-badge" id="player-filesize-badge">High Fidelity</span>
+        </div>
+
+        <div class="player-meta-row">
+          <div class="player-text-wrap">
+            <h2 class="player-title" id="player-title">Select a Song</h2>
+            <p class="player-artist" id="player-artist">Your Private Music Cloud</p>
+          </div>
+          <div class="player-meta-actions">
+            <button class="action-icon-btn" id="btn-favorite" aria-label="Favorite">
+              <svg class="heart-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Animated Audio Waveform Visualizer -->
+        <div class="waveform-container" id="waveform-container">
+          <div class="waveform-bars" id="waveform-bars">
+            <!-- 32 soundwave bars generated by app.js -->
+          </div>
+          <div class="waveform-timeline">
+            <span class="time-label" id="time-current">00:00</span>
+            <span class="time-label" id="time-total">00:00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Playback Controls -->
+      <div class="player-controls-section">
+        <div class="primary-controls">
+          <button class="skip-btn" id="btn-prev" aria-label="Previous Track">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="19 20 9 12 19 4 19 20"></polygon>
+              <line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"></line>
+            </svg>
+          </button>
+          <button class="glow-play-btn" id="btn-main-play" aria-label="Play/Pause">
+            <svg class="play-icon" width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <svg class="pause-icon" width="28" height="28" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+              <rect x="6" y="4" width="4" height="16"></rect>
+              <rect x="14" y="4" width="4" height="16"></rect>
+            </svg>
+          </button>
+          <button class="skip-btn" id="btn-next" aria-label="Next Track">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 4 15 12 5 20 5 4"></polygon>
+              <line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div class="secondary-controls">
+          <button class="sub-btn" id="btn-queue" aria-label="Queue">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="8" y1="6" x2="21" y2="6"></line>
+              <line x1="8" y1="12" x2="21" y2="12"></line>
+              <line x1="8" y1="18" x2="21" y2="18"></line>
+              <line x1="3" y1="6" x2="3.01" y2="6"></line>
+              <line x1="3" y1="12" x2="3.01" y2="12"></line>
+              <line x1="3" y1="18" x2="3.01" y2="18"></line>
+            </svg>
+          </button>
+          <button class="sub-btn" id="btn-repeat" aria-label="Repeat">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="17 1 21 5 17 9"></polyline>
+              <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+              <polyline points="7 23 3 19 7 15"></polyline>
+              <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+            </svg>
+          </button>
+          <button class="sub-btn" id="btn-shuffle" aria-label="Shuffle">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="16 3 21 3 21 8"></polyline>
+              <line x1="4" y1="20" x2="21" y2="3"></line>
+              <polyline points="21 16 21 21 16 21"></polyline>
+              <line x1="15" y1="15" x2="21" y2="21"></line>
+              <line x1="4" y1="4" x2="9" y2="9"></line>
+            </svg>
+          </button>
+          <button class="sub-btn" id="btn-equalizer" aria-label="Audio Quality">
+            <span class="quality-badge" id="quality-badge">Hi-Fi</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Hidden Native Audio Tag -->
+    <audio id="audio-engine" preload="auto" crossorigin="anonymous"></audio>
+
+  </div>
+
+  <!-- Cloud Studio Settings Modal -->
+  <div class="modal-backdrop" id="settings-modal" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-header-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </div>
+        <h3 class="modal-title">Cloud Studio Settings</h3>
+        <button class="modal-close-btn" id="btn-close-settings" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-group">
+          <div class="setting-item">
+            <div class="setting-label-wrap">
+              <span class="setting-title">Bot Account</span>
+              <span class="setting-sub">Connected via Telegram MTProto</span>
+            </div>
+            <span class="badge-online">@heysanthu_music_bot</span>
+          </div>
+          <div class="setting-item">
+            <div class="setting-label-wrap">
+              <span class="setting-title">Storage Channel</span>
+              <span class="setting-sub">Channel ID: -1004316652121</span>
+            </div>
+            <span class="badge-status">Online (my music cloud)</span>
+          </div>
+          <div class="setting-item">
+            <div class="setting-label-wrap">
+              <span class="setting-title">Audio Pipeline</span>
+              <span class="setting-sub">Zero-Disk Byte-Range Streaming</span>
+            </div>
+            <span class="badge-status">HTTP 206 Partial</span>
+          </div>
+          <div class="setting-item">
+            <div class="setting-label-wrap">
+              <span class="setting-title">Artwork Cache</span>
+              <span class="setting-sub">Local On-Demand Art Extraction</span>
+            </div>
+            <span class="badge-status" id="settings-art-status">10 Album Covers</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Library Activity Modal -->
+  <div class="modal-backdrop" id="activity-modal" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-header-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+        </div>
+        <h3 class="modal-title">Library Activity & Sync</h3>
+        <button class="modal-close-btn" id="btn-close-activity" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="activity-metric-grid">
+          <div class="metric-card">
+            <span class="metric-num" id="modal-stat-tracks">10</span>
+            <span class="metric-lbl">Indexed Tracks</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-num" id="modal-stat-albums">10</span>
+            <span class="metric-lbl">Albums</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-num" id="modal-stat-favs">0</span>
+            <span class="metric-lbl">Favorites</span>
+          </div>
+        </div>
+        <div class="sync-banner">
+          <div class="sync-ping"></div>
+          <div>
+            <p class="sync-headline">Real-Time Cloud Synchronization</p>
+            <p class="sync-detail">Any song uploaded to your private storage channel is instantly parsed, cover extracted, and ready to stream.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: tpmc-music-cloud
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.main
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: API_ID
+        sync: false
+      - key: API_HASH
+        sync: false
+      - key: BOT_TOKEN
+        sync: false
+      - key: CHANNEL_ID
+        sync: false
+      - key: TELEGRAM_SESSION
+        sync: false
+      - key: AUTHORIZED_USER_ID
+        sync: false
+      - key: APPROVED_USER_IDS
+        sync: false
+      - key: WEBAPP_URL
+        sync: false
+      - key: LOG_LEVEL
+        value: INFO
+      - key: MAX_CONCURRENT_JOBS
+        value: "1"
+      - key: MAX_DOWNLOAD_BATCH
+        value: "25"
+      - key: MAX_SEARCH_RESULTS
+        value: "50"
+      - key: FLOOD_WAIT_MAX
+        value: "300"

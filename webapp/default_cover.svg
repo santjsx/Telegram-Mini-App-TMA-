@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="100%" height="100%">
+  <defs>
+    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1A1829" />
+      <stop offset="50%" stop-color="#221C35" />
+      <stop offset="100%" stop-color="#0E0D16" />
+    </linearGradient>
+    <linearGradient id="pinkGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF4B72" />
+      <stop offset="100%" stop-color="#FD3A69" />
+    </linearGradient>
+  </defs>
+  <rect width="300" height="300" rx="24" fill="url(#g1)" />
+  <circle cx="150" cy="150" r="100" fill="none" stroke="#2D2845" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.6" />
+  <circle cx="150" cy="150" r="80" fill="none" stroke="#2D2845" stroke-width="1.5" opacity="0.5" />
+  <circle cx="150" cy="150" r="50" fill="url(#pinkGlow)" opacity="0.15" />
+  <circle cx="150" cy="150" r="28" fill="url(#pinkGlow)" />
+  <circle cx="150" cy="150" r="8" fill="#0E0D16" />
+  <!-- Music Note -->
+  <path d="M146 138 v20 a8 8 0 1 1 -4 -6.9 v-15.1 l14 -3 v18 a8 8 0 1 1 -4 -6.9 v-12.1 z" fill="#FFFFFF" opacity="0.9" />
+</svg>
