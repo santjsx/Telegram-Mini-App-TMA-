@@ -73,43 +73,26 @@ class CommandRouter:
         elif raw_text in {"📚 My Library"}:
             await self.status_handler.handle_library(message)
             return
-        elif raw_text in {"🎤 Top Artists"}:
-            artists = self.status_handler.indexer.get_top_artists(10)
-            if not artists:
+        elif raw_text in {"🎤 Top Artists", "🎤 Artists"} or command in {"/artists"}:
+            if not self.status_handler.indexer.get_all_artists():
                 await message.reply("🎤 No artists indexed in your library yet.")
             else:
-                lines = ["🎤 **Top Artists in Your Library**\n"]
-                inline_buttons = []
-                for name, count in artists:
-                    lines.append(f"• **{name}** ({count} tracks)")
-                    display_label = f"👤 {name[:16]}"
-                    safe_name = name[:30].strip()
-                    inline_buttons.append(
-                        Button.inline(display_label, data=f"s:p:1:artist:{safe_name}".encode("utf-8"))
-                    )
-                lines.append("\n💡 *Tap an artist below to listen:*")
-                btn_rows = [inline_buttons[i:i + 2] for i in range(0, len(inline_buttons), 2)]
-                btn_rows.append([Button.inline("🔙 Open Library", data=b"lib:overview")])
-                await message.reply("\n".join(lines), buttons=btn_rows)
+                text, buttons = self.status_handler.format_artists_view(page=1, back_label="🔙 Open Library")
+                await message.reply(text, buttons=buttons)
             return
-        elif raw_text in {"💿 Albums"}:
-            albums = self.status_handler.indexer.get_top_albums(10)
-            if not albums:
+        elif raw_text in {"💿 Albums", "💿 Top Albums"} or command in {"/albums"}:
+            if not self.status_handler.indexer.get_all_albums():
                 await message.reply("💿 No albums indexed in your library yet.")
             else:
-                lines = ["💿 **Top Albums in Your Library**\n"]
-                inline_buttons = []
-                for album, artist, count in albums:
-                    lines.append(f"• **{album}** — {artist}")
-                    display_label = f"💿 {album[:16]}"
-                    safe_album = album[:30].strip()
-                    inline_buttons.append(
-                        Button.inline(display_label, data=f"s:p:1:album:{safe_album}".encode("utf-8"))
-                    )
-                lines.append("\n💡 *Tap an album below to listen:*")
-                btn_rows = [inline_buttons[i:i + 2] for i in range(0, len(inline_buttons), 2)]
-                btn_rows.append([Button.inline("🔙 Open Library", data=b"lib:overview")])
-                await message.reply("\n".join(lines), buttons=btn_rows)
+                text, buttons = self.status_handler.format_albums_view(page=1, back_label="🔙 Open Library")
+                await message.reply(text, buttons=buttons)
+            return
+        elif raw_text in {"🎸 Genres"} or command in {"/genres"}:
+            if not self.status_handler.indexer.get_all_genres():
+                await message.reply("🎸 No genres indexed in your library yet.")
+            else:
+                text, buttons = self.status_handler.format_genres_view(page=1, back_label="🔙 Open Library")
+                await message.reply(text, buttons=buttons)
             return
         elif raw_text in {"⭐ Favorites"}:
             fav_count = self.status_handler.indexer.get_favorites_count()

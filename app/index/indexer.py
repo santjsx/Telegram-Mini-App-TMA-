@@ -97,7 +97,7 @@ class MusicIndexer:
         for genre_set in self._genre_index.values():
             genre_set.discard(message_id)
 
-    def get_top_artists(self, limit: int = 15) -> List[Tuple[str, int]]:
+    def get_top_artists(self, limit: Optional[int] = 15) -> List[Tuple[str, int]]:
         """Return list of (artist_name, track_count) sorted by count descending."""
         counts = []
         for norm_artist, m_ids in self._artist_index.items():
@@ -107,10 +107,16 @@ class MusicIndexer:
             first_track = next((self._tracks[mid] for mid in m_ids if mid in self._tracks), None)
             display_name = first_track.performer if first_track and first_track.performer else norm_artist.title()
             counts.append((display_name, len(m_ids)))
-        counts.sort(key=lambda x: x[1], reverse=True)
-        return counts[:limit]
+        counts.sort(key=lambda x: (-x[1], x[0].lower()))
+        if limit is not None:
+            return counts[:limit]
+        return counts
 
-    def get_top_albums(self, limit: int = 15) -> List[Tuple[str, str, int]]:
+    def get_all_artists(self) -> List[Tuple[str, int]]:
+        """Return list of all (artist_name, track_count) sorted by count descending, then name."""
+        return self.get_top_artists(limit=None)
+
+    def get_top_albums(self, limit: Optional[int] = 15) -> List[Tuple[str, str, int]]:
         """Return list of (album_name, artist_name, track_count) sorted by count descending."""
         counts = []
         for norm_album, m_ids in self._album_index.items():
@@ -120,10 +126,16 @@ class MusicIndexer:
             display_album = first_track.album if first_track and first_track.album else norm_album.title()
             display_artist = first_track.performer if first_track and first_track.performer else "Various"
             counts.append((display_album, display_artist, len(m_ids)))
-        counts.sort(key=lambda x: x[2], reverse=True)
-        return counts[:limit]
+        counts.sort(key=lambda x: (-x[2], x[0].lower()))
+        if limit is not None:
+            return counts[:limit]
+        return counts
 
-    def get_top_genres(self, limit: int = 15) -> List[Tuple[str, int]]:
+    def get_all_albums(self) -> List[Tuple[str, str, int]]:
+        """Return list of all (album_name, artist_name, track_count) sorted by count descending, then name."""
+        return self.get_top_albums(limit=None)
+
+    def get_top_genres(self, limit: Optional[int] = 15) -> List[Tuple[str, int]]:
         """Return list of (genre_name, track_count) sorted by count descending."""
         counts = []
         for norm_genre, m_ids in self._genre_index.items():
@@ -132,8 +144,14 @@ class MusicIndexer:
             first_track = next((self._tracks[mid] for mid in m_ids if mid in self._tracks), None)
             display_genre = first_track.genre if first_track and first_track.genre else norm_genre.title()
             counts.append((display_genre, len(m_ids)))
-        counts.sort(key=lambda x: x[1], reverse=True)
-        return counts[:limit]
+        counts.sort(key=lambda x: (-x[1], x[0].lower()))
+        if limit is not None:
+            return counts[:limit]
+        return counts
+
+    def get_all_genres(self) -> List[Tuple[str, int]]:
+        """Return list of all (genre_name, track_count) sorted by count descending, then name."""
+        return self.get_top_genres(limit=None)
 
     def get_favorites_count(self) -> int:
         return sum(1 for t in self._tracks.values() if t.is_favorite)

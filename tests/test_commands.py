@@ -259,3 +259,96 @@ async def test_callback_album_search(test_setup):
     fake_event.edit.assert_called_once()
     edited_text = fake_event.edit.call_args[0][0]
     assert "A Vachi B Padi" in edited_text
+
+
+@pytest.mark.asyncio
+async def test_callback_albums_pagination(test_setup):
+    router, indexer, _ = test_setup
+    from app.index.models import Track
+
+    # Add 15 distinct albums
+    for i in range(1, 16):
+        indexer.add_track(
+            Track(
+                message_id=100 + i,
+                channel_id=-1001,
+                title=f"Track {i}",
+                performer=f"Artist {i}",
+                album=f"Album {i:02d}",
+            )
+        )
+
+    # Page 1
+    event_p1 = MagicMock()
+    event_p1.data = b"lib:albums"
+    event_p1.edit = AsyncMock()
+    event_p1.answer = AsyncMock()
+
+    await router.route_callback(event_p1)
+    event_p1.edit.assert_called_once()
+    text_p1 = event_p1.edit.call_args[0][0]
+    buttons_p1 = event_p1.edit.call_args[1]["buttons"]
+
+    assert "Albums in Your Library" in text_p1
+    assert "Page **1** of **2**" in text_p1
+    assert "15 total" in text_p1
+    assert "Album 01" in text_p1
+    # Check that Next button exists
+    all_btn_data = [
+        btn.type.data.decode("utf-8")
+        for row in buttons_p1
+        for btn in row
+        if hasattr(btn, "type") and hasattr(btn.type, "data") and btn.type.data
+    ]
+    assert "lib:albums:2" in all_btn_data
+
+    # Page 2
+    event_p2 = MagicMock()
+    event_p2.data = b"lib:albums:2"
+    event_p2.edit = AsyncMock()
+    event_p2.answer = AsyncMock()
+
+    await router.route_callback(event_p2)
+    event_p2.edit.assert_called_once()
+    text_p2 = event_p2.edit.call_args[0][0]
+    buttons_p2 = event_p2.edit.call_args[1]["buttons"]
+
+    assert "Page **2** of **2**" in text_p2
+    assert "Album 15" in text_p2
+    all_btn_data_p2 = [
+        btn.type.data.decode("utf-8")
+        for row in buttons_p2
+        for btn in row
+        if hasattr(btn, "type") and hasattr(btn.type, "data") and btn.type.data
+    ]
+    assert "lib:albums:1" in all_btn_data_p2
+
+
+@pytest.mark.asyncio
+async def test_route_albums_button_and_command(test_setup):
+    router, indexer, _ = test_setup
+    from app.index.models import Track
+    indexer.add_track(
+        Track(
+            message_id=200,
+            channel_id=-1001,
+            title="Song",
+            performer="Singer",
+            album="Masterpiece",
+        )
+    )
+
+    # Reply keyboard button "💿 Albums"
+    msg_btn = DummyMessage("💿 Albums")
+    await router.route_message(msg_btn)
+    msg_btn.reply.assert_called_once()
+    assert "Albums in Your Library" in msg_btn.reply.call_args[0][0]
+    assert "Masterpiece" in msg_btn.reply.call_args[0][0]
+
+    # Slash command "/albums"
+    msg_cmd = DummyMessage("/albums")
+    await router.route_message(msg_cmd)
+    msg_cmd.reply.assert_called_once()
+    assert "Albums in Your Library" in msg_cmd.reply.call_args[0][0]
+    assert "Masterpiece" in msg_cmd.reply.call_args[0][0]
+

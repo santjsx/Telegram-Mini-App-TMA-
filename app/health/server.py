@@ -262,7 +262,7 @@ class HealthServer:
                 album_lead_mid[alb] = t.message_id
 
         albums_data = []
-        for album, artist, count in self.indexer.get_top_albums(20):
+        for album, artist, count in self.indexer.get_all_albums():
             palette_idx = abs(hash(album)) % len(color_palettes)
             c1, c2 = color_palettes[palette_idx]
             lead_mid = album_lead_mid.get(album) or (all_tracks[0].message_id if all_tracks else 0)
@@ -275,7 +275,7 @@ class HealthServer:
             })
 
         artists_data = []
-        for name, count in self.indexer.get_top_artists(20):
+        for name, count in self.indexer.get_all_artists():
             palette_idx = abs(hash(name)) % len(color_palettes)
             c1, c2 = color_palettes[palette_idx]
             artists_data.append({

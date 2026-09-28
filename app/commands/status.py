@@ -5,6 +5,7 @@ Status and Library command handlers.
 from __future__ import annotations
 
 import logging
+import math
 import os
 from typing import TYPE_CHECKING
 from telethon import Button, events
@@ -93,6 +94,186 @@ class StatusCommandHandler:
             f"• **Host:** {host_display} (Online)"
         )
 
+    def format_albums_view(
+        self,
+        page: int = 1,
+        page_size: int = 10,
+        back_label: str = "🔙 Back to Library",
+        back_action: str = "lib:overview",
+    ) -> tuple[str, list[list[Button]]]:
+        all_albums = self.indexer.get_all_albums()
+        if not all_albums:
+            return (
+                "💿 No albums indexed in your library yet.\n\n"
+                "💡 *Ensure your audio tracks have the album tag or `#album:Name` set in captions.*",
+                [[Button.inline(back_label, data=back_action.encode("utf-8"))]],
+            )
+
+        total_albums = len(all_albums)
+        total_pages = max(1, math.ceil(total_albums / page_size))
+        current_page = max(1, min(page, total_pages))
+
+        start_idx = (current_page - 1) * page_size
+        end_idx = start_idx + page_size
+        page_albums = all_albums[start_idx:end_idx]
+
+        if total_pages > 1:
+            lines = [f"💿 **Albums in Your Library** · Page **{current_page}** of **{total_pages}** ({total_albums} total)\n"]
+        else:
+            lines = [f"💿 **Albums in Your Library** ({total_albums} total)\n"]
+
+        inline_buttons = []
+        for album, artist, count in page_albums:
+            lines.append(f"• **{album}** — {artist}")
+            display_label = f"💿 {album[:16]}"
+            prefix = "s:p:1:album:"
+            max_bytes = 64 - len(prefix.encode("utf-8"))
+            safe_album = album.strip().encode("utf-8")[:max_bytes].decode("utf-8", errors="ignore").strip()
+            inline_buttons.append(
+                Button.inline(display_label, data=f"{prefix}{safe_album}".encode("utf-8"))
+            )
+
+        lines.append("\n💡 *Tap an album below to listen:*")
+        btn_rows = [inline_buttons[i:i + 2] for i in range(0, len(inline_buttons), 2)]
+
+        if total_pages > 1:
+            nav_row = []
+            if current_page > 1:
+                nav_row.append(
+                    Button.inline("⬅️ Prev", data=f"lib:albums:{current_page - 1}".encode("utf-8"))
+                )
+            nav_row.append(
+                Button.inline(f"{current_page} / {total_pages}", data=b"lib:noop")
+            )
+            if current_page < total_pages:
+                nav_row.append(
+                    Button.inline("➡️ Next", data=f"lib:albums:{current_page + 1}".encode("utf-8"))
+                )
+            btn_rows.append(nav_row)
+
+        btn_rows.append([Button.inline(back_label, data=back_action.encode("utf-8"))])
+        return "\n".join(lines), btn_rows
+
+    def format_artists_view(
+        self,
+        page: int = 1,
+        page_size: int = 10,
+        back_label: str = "🔙 Back to Library",
+        back_action: str = "lib:overview",
+    ) -> tuple[str, list[list[Button]]]:
+        all_artists = self.indexer.get_all_artists()
+        if not all_artists:
+            return (
+                "🎤 No artists indexed in your library yet.\n\n"
+                "💡 *Ensure your audio tracks have the artist tag or `#artist:Name` set in captions.*",
+                [[Button.inline(back_label, data=back_action.encode("utf-8"))]],
+            )
+
+        total_artists = len(all_artists)
+        total_pages = max(1, math.ceil(total_artists / page_size))
+        current_page = max(1, min(page, total_pages))
+
+        start_idx = (current_page - 1) * page_size
+        end_idx = start_idx + page_size
+        page_artists = all_artists[start_idx:end_idx]
+
+        if total_pages > 1:
+            lines = [f"🎤 **Top Artists in Your Library** · Page **{current_page}** of **{total_pages}** ({total_artists} total)\n"]
+        else:
+            lines = [f"🎤 **Top Artists in Your Library** ({total_artists} total)\n"]
+
+        inline_buttons = []
+        for name, count in page_artists:
+            lines.append(f"• **{name}** ({count} tracks)")
+            display_label = f"👤 {name[:16]}"
+            prefix = "s:p:1:artist:"
+            max_bytes = 64 - len(prefix.encode("utf-8"))
+            safe_name = name.strip().encode("utf-8")[:max_bytes].decode("utf-8", errors="ignore").strip()
+            inline_buttons.append(
+                Button.inline(display_label, data=f"{prefix}{safe_name}".encode("utf-8"))
+            )
+
+        lines.append("\n💡 *Tap an artist below to listen:*")
+        btn_rows = [inline_buttons[i:i + 2] for i in range(0, len(inline_buttons), 2)]
+
+        if total_pages > 1:
+            nav_row = []
+            if current_page > 1:
+                nav_row.append(
+                    Button.inline("⬅️ Prev", data=f"lib:artists:{current_page - 1}".encode("utf-8"))
+                )
+            nav_row.append(
+                Button.inline(f"{current_page} / {total_pages}", data=b"lib:noop")
+            )
+            if current_page < total_pages:
+                nav_row.append(
+                    Button.inline("➡️ Next", data=f"lib:artists:{current_page + 1}".encode("utf-8"))
+                )
+            btn_rows.append(nav_row)
+
+        btn_rows.append([Button.inline(back_label, data=back_action.encode("utf-8"))])
+        return "\n".join(lines), btn_rows
+
+    def format_genres_view(
+        self,
+        page: int = 1,
+        page_size: int = 10,
+        back_label: str = "🔙 Back to Library",
+        back_action: str = "lib:overview",
+    ) -> tuple[str, list[list[Button]]]:
+        all_genres = self.indexer.get_all_genres()
+        if not all_genres:
+            return (
+                "🎸 No genres indexed in your library yet.\n\n"
+                "💡 *Ensure your audio tracks have the genre tag or `#genre:Name` set in captions.*",
+                [[Button.inline(back_label, data=back_action.encode("utf-8"))]],
+            )
+
+        total_genres = len(all_genres)
+        total_pages = max(1, math.ceil(total_genres / page_size))
+        current_page = max(1, min(page, total_pages))
+
+        start_idx = (current_page - 1) * page_size
+        end_idx = start_idx + page_size
+        page_genres = all_genres[start_idx:end_idx]
+
+        if total_pages > 1:
+            lines = [f"🎸 **Genres in Your Library** · Page **{current_page}** of **{total_pages}** ({total_genres} total)\n"]
+        else:
+            lines = [f"🎸 **Genres in Your Library** ({total_genres} total)\n"]
+
+        inline_buttons = []
+        for genre, count in page_genres:
+            lines.append(f"• **{genre}** ({count} tracks)")
+            display_label = f"🎸 #{genre[:16]}"
+            prefix = "s:p:1:#"
+            max_bytes = 64 - len(prefix.encode("utf-8"))
+            safe_genre = genre.strip().encode("utf-8")[:max_bytes].decode("utf-8", errors="ignore").strip()
+            inline_buttons.append(
+                Button.inline(display_label, data=f"{prefix}{safe_genre}".encode("utf-8"))
+            )
+
+        lines.append("\n💡 *Tap a genre below to listen:*")
+        btn_rows = [inline_buttons[i:i + 2] for i in range(0, len(inline_buttons), 2)]
+
+        if total_pages > 1:
+            nav_row = []
+            if current_page > 1:
+                nav_row.append(
+                    Button.inline("⬅️ Prev", data=f"lib:genres:{current_page - 1}".encode("utf-8"))
+                )
+            nav_row.append(
+                Button.inline(f"{current_page} / {total_pages}", data=b"lib:noop")
+            )
+            if current_page < total_pages:
+                nav_row.append(
+                    Button.inline("➡️ Next", data=f"lib:genres:{current_page + 1}".encode("utf-8"))
+                )
+            btn_rows.append(nav_row)
+
+        btn_rows.append([Button.inline(back_label, data=back_action.encode("utf-8"))])
+        return "\n".join(lines), btn_rows
+
     async def handle_status(self, message: Message) -> None:
         text = self._format_status_text()
         buttons = [
@@ -157,75 +338,58 @@ class StatusCommandHandler:
             await event.edit(text, buttons=buttons)
             return
 
-        if action == "artists":
-            artists = self.indexer.get_top_artists(10)
-            if not artists:
+        if action == "noop":
+            await event.answer()
+            return
+
+        if action == "artists" or action.startswith("artists:"):
+            if not self.indexer.get_all_artists():
                 await event.answer("No artists indexed yet.", alert=True)
                 return
 
-            lines = ["🎤 **Top Artists in Your Library**\n"]
-            inline_buttons = []
-            for name, count in artists:
-                lines.append(f"• **{name}** ({count} tracks)")
-                display_label = f"👤 {name[:16]}"
-                safe_name = name[:30].strip()
-                inline_buttons.append(
-                    Button.inline(display_label, data=f"s:p:1:artist:{safe_name}".encode("utf-8"))
-                )
+            page = 1
+            if ":" in action:
+                try:
+                    page = int(action.split(":", 1)[1])
+                except (ValueError, IndexError):
+                    page = 1
 
-            lines.append("\n💡 *Tap an artist below to listen:*")
-            btn_rows = [inline_buttons[i:i + 2] for i in range(0, len(inline_buttons), 2)]
-            btn_rows.append([Button.inline("🔙 Back to Library", data=b"lib:overview")])
-
-            await event.edit("\n".join(lines), buttons=btn_rows)
+            text, buttons = self.format_artists_view(page=page)
+            await event.edit(text, buttons=buttons)
             await event.answer()
             return
 
-        if action == "albums":
-            albums = self.indexer.get_top_albums(10)
-            if not albums:
+        if action == "albums" or action.startswith("albums:"):
+            if not self.indexer.get_all_albums():
                 await event.answer("No albums indexed yet.", alert=True)
                 return
 
-            lines = ["💿 **Top Albums in Your Library**\n"]
-            inline_buttons = []
-            for album, artist, count in albums:
-                lines.append(f"• **{album}** — {artist}")
-                display_label = f"💿 {album[:16]}"
-                safe_album = album[:30].strip()
-                inline_buttons.append(
-                    Button.inline(display_label, data=f"s:p:1:album:{safe_album}".encode("utf-8"))
-                )
+            page = 1
+            if ":" in action:
+                try:
+                    page = int(action.split(":", 1)[1])
+                except (ValueError, IndexError):
+                    page = 1
 
-            lines.append("\n💡 *Tap an album below to listen:*")
-            btn_rows = [inline_buttons[i:i + 2] for i in range(0, len(inline_buttons), 2)]
-            btn_rows.append([Button.inline("🔙 Back to Library", data=b"lib:overview")])
-
-            await event.edit("\n".join(lines), buttons=btn_rows)
+            text, buttons = self.format_albums_view(page=page)
+            await event.edit(text, buttons=buttons)
             await event.answer()
             return
 
-        if action == "genres":
-            genres = self.indexer.get_top_genres(10)
-            if not genres:
+        if action == "genres" or action.startswith("genres:"):
+            if not self.indexer.get_all_genres():
                 await event.answer("No genres indexed yet.", alert=True)
                 return
 
-            lines = ["🎸 **Genres in Your Library**\n"]
-            inline_buttons = []
-            for genre, count in genres:
-                lines.append(f"• **{genre}** ({count} tracks)")
-                display_label = f"🎸 #{genre[:16]}"
-                safe_genre = genre[:20].strip()
-                inline_buttons.append(
-                    Button.inline(display_label, data=f"s:p:1:#{safe_genre}".encode("utf-8"))
-                )
+            page = 1
+            if ":" in action:
+                try:
+                    page = int(action.split(":", 1)[1])
+                except (ValueError, IndexError):
+                    page = 1
 
-            lines.append("\n💡 *Tap a genre below to listen:*")
-            btn_rows = [inline_buttons[i:i + 2] for i in range(0, len(inline_buttons), 2)]
-            btn_rows.append([Button.inline("🔙 Back to Library", data=b"lib:overview")])
-
-            await event.edit("\n".join(lines), buttons=btn_rows)
+            text, buttons = self.format_genres_view(page=page)
+            await event.edit(text, buttons=buttons)
             await event.answer()
             return
 
