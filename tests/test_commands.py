@@ -5,6 +5,7 @@ from app.commands.status import StatusCommandHandler
 from app.commands.search import SearchCommandHandler
 from app.commands.download import DownloadCommandHandler
 from app.commands.admin import AdminCommandHandler
+from app.commands.explorer import ExplorerCommandHandler
 from app.index.indexer import MusicIndexer
 from app.jobs.manager import JobManager
 from app.jobs.delivery import DeliveryEngine
@@ -45,12 +46,14 @@ def test_setup():
     search_handler = SearchCommandHandler(indexer, job_manager)
     download_handler = DownloadCommandHandler(indexer, job_manager, bot_manager)
     admin_handler = AdminCommandHandler(indexer, fake_client, cfg)
+    explorer_handler = ExplorerCommandHandler(indexer, job_manager, search_handler)
 
     router = CommandRouter(
         status_handler=status_handler,
         search_handler=search_handler,
         download_handler=download_handler,
         admin_handler=admin_handler,
+        explorer_handler=explorer_handler,
     )
     return router, indexer, job_manager
 
@@ -409,5 +412,90 @@ async def test_search_format_page_layout(test_setup):
     btn2_text = buttons[0][1].text
     assert "📥 1. RAYALASEEMA" in btn1_text
     assert "📥 2. Annochadu" in btn2_text
+
+
+@pytest.mark.asyncio
+async def test_route_explorer(test_setup):
+    router, indexer, _ = test_setup
+    from app.index.models import Track
+    indexer.add_track(
+        Track(message_id=1, channel_id=-1001, title="Song", performer="Artist", album="Album")
+    )
+
+    # Message button "📁 File Explorer"
+    msg = DummyMessage("📁 File Explorer")
+    await router.route_message(msg)
+    msg.reply.assert_called_once()
+    reply_text = msg.reply.call_args[0][0]
+    assert "Music Cloud Explorer" in reply_text
+    assert "Artists" in reply_text
+
+    # Slash command "/explore"
+    msg_cmd = DummyMessage("/explore")
+    await router.route_message(msg_cmd)
+    msg_cmd.reply.assert_called_once()
+    assert "Music Cloud Explorer" in msg_cmd.reply.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_callback_explorer_az(test_setup):
+    router, indexer, _ = test_setup
+    fake_event = MagicMock()
+    fake_event.data = b"exp:az:art"
+    fake_event.edit = AsyncMock()
+    fake_event.answer = AsyncMock()
+
+    await router.route_callback(fake_event)
+    fake_event.edit.assert_called_once()
+    edited_text = fake_event.edit.call_args[0][0]
+    assert "A–Z Alphabet Index" in edited_text
+    assert "Artists" in edited_text
+
+
+@pytest.mark.asyncio
+async def test_callback_explorer_artist_drilldown(test_setup):
+    router, indexer, _ = test_setup
+    from app.index.models import Track
+    indexer.add_track(
+        Track(message_id=1, channel_id=-1001, title="Yellow", performer="Coldplay", album="Parachutes")
+    )
+    indexer.add_track(
+        Track(message_id=2, channel_id=-1001, title="Fix You", performer="Coldplay", album="X&Y")
+    )
+
+    fake_event = MagicMock()
+    fake_event.data = b"exp:art_v:Coldplay"
+    fake_event.edit = AsyncMock()
+    fake_event.answer = AsyncMock()
+
+    await router.route_callback(fake_event)
+    fake_event.edit.assert_called_once()
+    edited_text = fake_event.edit.call_args[0][0]
+    assert "Coldplay" in edited_text
+    assert "Parachutes" in edited_text
+    assert "X&Y" in edited_text
+    assert "Discography" in edited_text
+
+
+@pytest.mark.asyncio
+async def test_callback_explorer_lossless(test_setup):
+    router, indexer, _ = test_setup
+    from app.index.models import Track
+    indexer.add_track(
+        Track(message_id=1, channel_id=-1001, title="Clocks", performer="Coldplay", mime_type="audio/flac")
+    )
+
+    fake_event = MagicMock()
+    fake_event.data = b"exp:lossless"
+    fake_event.edit = AsyncMock()
+    fake_event.answer = AsyncMock()
+
+    await router.route_callback(fake_event)
+    fake_event.edit.assert_called_once()
+    edited_text = fake_event.edit.call_args[0][0]
+    assert "Lossless Audio Collection" in edited_text
+    assert "Clocks" in edited_text
+    assert "💎 FLAC" in edited_text
+
 
 

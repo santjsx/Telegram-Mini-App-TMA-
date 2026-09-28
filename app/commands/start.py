@@ -13,9 +13,9 @@ from telethon.tl.custom.message import Message
 def get_main_menu_keyboard():
     return [
         [Button.text("🎵 Web Player"), Button.text("🔍 Search Music")],
-        [Button.text("📚 My Library"), Button.text("⭐ Favorites")],
+        [Button.text("📁 File Explorer"), Button.text("📚 My Library")],
         [Button.text("🎤 Top Artists"), Button.text("💿 Albums")],
-        [Button.text("⚡ Cloud Status")],
+        [Button.text("⭐ Favorites"), Button.text("⚡ Cloud Status")],
     ]
 
 

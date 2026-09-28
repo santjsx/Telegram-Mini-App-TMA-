@@ -24,6 +24,7 @@ from app.commands.status import StatusCommandHandler
 from app.commands.search import SearchCommandHandler
 from app.commands.download import DownloadCommandHandler
 from app.commands.admin import AdminCommandHandler
+from app.commands.explorer import ExplorerCommandHandler
 from app.commands.router import CommandRouter
 from app.auth.manager import AccessManager
 from app.health.server import HealthServer
@@ -74,6 +75,11 @@ class TPMCApp:
             access_manager=self.access_manager,
             bot_manager=self.bot_manager,
         )
+        self.explorer_handler = ExplorerCommandHandler(
+            indexer=self.indexer,
+            job_manager=self.job_manager,
+            search_handler=self.search_handler,
+        )
 
         self.router = CommandRouter(
             status_handler=self.status_handler,
@@ -82,6 +88,7 @@ class TPMCApp:
             admin_handler=self.admin_handler,
             access_manager=self.access_manager,
             webapp_url=config.webapp_url,
+            explorer_handler=self.explorer_handler,
         )
 
         # Health & WebApp Streaming HTTP Server

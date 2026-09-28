@@ -35,12 +35,20 @@ class StatusCommandHandler:
     def _get_library_buttons(self) -> list[list[Button]]:
         return [
             [
+                Button.inline("📁 File Explorer", data=b"exp:root"),
+                Button.inline("🔤 A–Z Index", data=b"exp:az:art"),
+            ],
+            [
                 Button.inline("🎤 Top Artists", data=b"lib:artists"),
                 Button.inline("💿 Albums", data=b"lib:albums"),
             ],
             [
                 Button.inline("🎸 Genres", data=b"lib:genres"),
                 Button.inline("⭐ Favorites", data=b"lib:favs"),
+            ],
+            [
+                Button.inline("💎 Lossless FLAC", data=b"exp:lossless"),
+                Button.inline("🆕 Recent Tracks", data=b"exp:recent"),
             ],
             [
                 Button.inline("🎲 Surprise Me", data=b"lib:random"),

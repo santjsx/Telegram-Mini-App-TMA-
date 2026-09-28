@@ -153,6 +153,58 @@ class MusicIndexer:
         """Return list of all (genre_name, track_count) sorted by count descending, then name."""
         return self.get_top_genres(limit=None)
 
+    def get_albums_by_artist(self, artist_name: str) -> List[Tuple[str, int]]:
+        """Return list of (album_name, track_count) for a specific artist."""
+        from app.index.parser import normalize_string
+        target_norm = normalize_string(artist_name)
+        m_ids = self._artist_index.get(target_norm, set())
+        if not m_ids:
+            for norm_key, ids in self._artist_index.items():
+                if target_norm in norm_key or norm_key in target_norm:
+                    m_ids = ids
+                    break
+        album_counts: Dict[str, int] = {}
+        for mid in m_ids:
+            track = self._tracks.get(mid)
+            if track and track.album and track.album != "Unknown Album":
+                album_counts[track.album] = album_counts.get(track.album, 0) + 1
+        return sorted(album_counts.items(), key=lambda x: (-x[1], x[0].lower()))
+
+    def get_artists_by_letter(self, letter: str) -> List[Tuple[str, int]]:
+        """Filter artists by starting letter (or '#' for non-alphabetic)."""
+        letter_lower = letter.lower().strip()
+        all_artists = self.get_all_artists()
+        if letter_lower == "#":
+            return [a for a in all_artists if not a[0] or not a[0][0].isalpha()]
+        return [a for a in all_artists if a[0] and a[0].lower().startswith(letter_lower)]
+
+    def get_albums_by_letter(self, letter: str) -> List[Tuple[str, str, int]]:
+        """Filter albums by starting letter (or '#' for non-alphabetic)."""
+        letter_lower = letter.lower().strip()
+        all_albums = self.get_all_albums()
+        if letter_lower == "#":
+            return [a for a in all_albums if not a[0] or not a[0][0].isalpha()]
+        return [a for a in all_albums if a[0] and a[0].lower().startswith(letter_lower)]
+
+    def get_recent_tracks(self, limit: int = 10) -> List[Track]:
+        """Return the most recently uploaded or indexed tracks."""
+        sorted_tracks = sorted(
+            self._tracks.values(),
+            key=lambda t: (t.upload_timestamp or t.indexed_timestamp, t.message_id),
+            reverse=True,
+        )
+        return sorted_tracks[:limit]
+
+    def get_lossless_tracks(self) -> List[Track]:
+        """Return all FLAC / WAV lossless tracks."""
+        return [
+            t for t in self._tracks.values()
+            if "flac" in (t.mime_type or "").lower()
+            or (t.filename or "").lower().endswith(".flac")
+            or "wav" in (t.mime_type or "").lower()
+            or (t.filename or "").lower().endswith(".wav")
+        ]
+
     def get_favorites_count(self) -> int:
         return sum(1 for t in self._tracks.values() if t.is_favorite)
 

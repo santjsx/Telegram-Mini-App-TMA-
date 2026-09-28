@@ -8,13 +8,16 @@ import logging
 from telethon import Button, events
 from telethon.tl.custom.message import Message
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from app.commands.start import handle_start, handle_help, handle_player
 from app.commands.status import StatusCommandHandler
 from app.commands.search import SearchCommandHandler
 from app.commands.download import DownloadCommandHandler
 from app.commands.admin import AdminCommandHandler
 from app.auth.manager import AccessManager
+
+if TYPE_CHECKING:
+    from app.commands.explorer import ExplorerCommandHandler
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +31,7 @@ class CommandRouter:
         admin_handler: AdminCommandHandler,
         access_manager: Optional[AccessManager] = None,
         webapp_url: Optional[str] = None,
+        explorer_handler: Optional[ExplorerCommandHandler] = None,
     ) -> None:
         self.status_handler = status_handler
         self.search_handler = search_handler
@@ -35,6 +39,7 @@ class CommandRouter:
         self.admin_handler = admin_handler
         self.access_manager = access_manager
         self.webapp_url = webapp_url
+        self.explorer_handler = explorer_handler
 
     async def route_message(self, message: Message) -> None:
         raw_text = (message.text or "").strip()
@@ -69,6 +74,12 @@ class CommandRouter:
                 ],
             ]
             await message.reply(text, buttons=buttons)
+            return
+        elif raw_text in {"📁 File Explorer", "📁 Explorer", "📂 Explorer"} or command in {"/explore", "/explorer"}:
+            if self.explorer_handler:
+                await self.explorer_handler.handle_explorer(message)
+            else:
+                await self.status_handler.handle_library(message)
             return
         elif raw_text in {"📚 My Library"}:
             await self.status_handler.handle_library(message)
@@ -154,6 +165,11 @@ class CommandRouter:
         data = event.data.decode("utf-8")
         if data.startswith("s:"):
             await self.search_handler.handle_callback(event)
+        elif data.startswith("exp:"):
+            if self.explorer_handler:
+                await self.explorer_handler.handle_callback(event)
+            else:
+                await event.answer("Explorer not available.", alert=True)
         elif data.startswith("lib:"):
             await self.status_handler.handle_callback(event)
         elif data.startswith("auth:"):
