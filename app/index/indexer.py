@@ -316,6 +316,13 @@ class MusicIndexer:
                     f"Indexing completed successfully! Scanned {scanned_count} messages, "
                     f"indexed {indexed_count} tracks. Total tracks in library: {len(self._tracks)}."
                 )
+
+                # Proactively precache album cover art in background so album cards load instantly
+                try:
+                    from app.index.artwork import ArtworkManager
+                    asyncio.create_task(ArtworkManager.precache_library_artworks(self, user_client=user_client))
+                except Exception as precache_err:
+                    logger.debug(f"Could not launch artwork precache: {precache_err}")
             except asyncio.CancelledError:
                 logger.info("Indexing task was cancelled.")
                 self.state = IndexState.READY

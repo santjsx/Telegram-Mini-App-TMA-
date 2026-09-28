@@ -129,6 +129,15 @@ class TPMCApp:
         # 1. Start HTTP Health Server first (for Render health checks)
         await self.health_server.start()
 
+        # Proactively cache local album artworks if local music folder exists
+        try:
+            from app.index.artwork import ArtworkManager
+            cached_count = ArtworkManager.scan_and_cache_local_directory()
+            if cached_count > 0:
+                logger.info(f"Pre-cached cover art for {cached_count} local albums.")
+        except Exception as e:
+            logger.debug(f"Local artwork scan skipped: {e}")
+
         # 2. Connect Telegram clients (fault-tolerant: never crashes the web server)
         await self.connection_manager.connect_all(
             bot_manager=self.bot_manager,

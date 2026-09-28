@@ -35,6 +35,20 @@ class SearchCommandHandler:
         self.job_manager = job_manager
         self.webapp_url = webapp_url
 
+    @property
+    def user_client(self) -> Any:
+        if hasattr(self.job_manager, "delivery_engine"):
+            return getattr(self.job_manager.delivery_engine, "user_client", None)
+        return None
+
+    @property
+    def bot_client(self) -> Any:
+        if hasattr(self.job_manager, "delivery_engine"):
+            bm = getattr(self.job_manager.delivery_engine, "bot_manager", None)
+            if bm and hasattr(bm, "client"):
+                return bm.client
+        return None
+
     async def handle_search(self, message: Message) -> None:
         text = message.text.strip()
         if text.startswith("/search"):
@@ -70,9 +84,13 @@ class SearchCommandHandler:
         q_lower = query.lower()
         if q_lower.startswith("album:"):
             album_name = query[6:].strip()
-            artwork_path = ArtworkManager.get_album_artwork(album_name, self.indexer)
+            artwork_path = await ArtworkManager.ensure_album_artwork(
+                album_name, self.indexer, user_client=self.user_client, bot_client=self.bot_client
+            )
         elif result.total_count == 1:
-            artwork_path = ArtworkManager.resolve_artwork(result.tracks[0], self.indexer)
+            artwork_path = await ArtworkManager.ensure_track_artwork(
+                result.tracks[0], user_client=self.user_client, bot_client=self.bot_client, indexer=self.indexer
+            )
 
         await send_or_edit_artwork(message, msg_text, buttons=buttons, artwork_path=artwork_path)
 
@@ -116,7 +134,9 @@ class SearchCommandHandler:
                 await event.answer("Track not found.", alert=True)
                 return
             msg_text, buttons = self._format_track_info(track, return_query=return_query)
-            artwork_path = ArtworkManager.resolve_artwork(track, self.indexer)
+            artwork_path = await ArtworkManager.ensure_track_artwork(
+                track, user_client=self.user_client, bot_client=self.bot_client, indexer=self.indexer
+            )
             await send_or_edit_artwork(event, msg_text, buttons=buttons, artwork_path=artwork_path)
             return
 
@@ -201,9 +221,13 @@ class SearchCommandHandler:
         q_lower = query.lower()
         if q_lower.startswith("album:"):
             album_name = query[6:].strip()
-            artwork_path = ArtworkManager.get_album_artwork(album_name, self.indexer)
+            artwork_path = await ArtworkManager.ensure_album_artwork(
+                album_name, self.indexer, user_client=self.user_client, bot_client=self.bot_client
+            )
         elif result.total_count == 1:
-            artwork_path = ArtworkManager.resolve_artwork(result.tracks[0], self.indexer)
+            artwork_path = await ArtworkManager.ensure_track_artwork(
+                result.tracks[0], user_client=self.user_client, bot_client=self.bot_client, indexer=self.indexer
+            )
 
         await send_or_edit_artwork(event, msg_text, buttons=buttons, artwork_path=artwork_path)
 

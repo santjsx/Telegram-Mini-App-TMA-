@@ -36,6 +36,20 @@ class StatusCommandHandler:
         self.indexer = indexer
         self.job_manager = job_manager
 
+    @property
+    def user_client(self) -> Any:
+        if hasattr(self.job_manager, "delivery_engine"):
+            return getattr(self.job_manager.delivery_engine, "user_client", None)
+        return None
+
+    @property
+    def bot_client(self) -> Any:
+        if hasattr(self.job_manager, "delivery_engine"):
+            bm = getattr(self.job_manager.delivery_engine, "bot_manager", None)
+            if bm and hasattr(bm, "client"):
+                return bm.client
+        return None
+
     def _get_library_buttons(self) -> list[list[Button]]:
         return [
             [
@@ -364,6 +378,9 @@ class StatusCommandHandler:
                 await target.answer(f"🎲 Picked: {clean_title[:25]}!")
             except Exception:
                 pass
+        artwork_path = await ArtworkManager.ensure_track_artwork(
+            track, user_client=self.user_client, bot_client=self.bot_client, indexer=self.indexer
+        )
         await send_or_edit_artwork(target, text, buttons=buttons, artwork_path=artwork_path)
 
     async def handle_callback(self, event: events.CallbackQuery.Event) -> None:
@@ -376,14 +393,14 @@ class StatusCommandHandler:
         if action == "overview":
             text = self._format_library_overview()
             buttons = self._get_library_buttons()
-            await event.edit(text, buttons=buttons)
+            await send_or_edit_artwork(event, text, buttons=buttons, artwork_path=None)
             await event.answer()
             return
 
         if action == "status":
             text = self._format_status_text()
             buttons = [[Button.inline("🔙 Back to Library", data=b"lib:overview")]]
-            await event.edit(text, buttons=buttons)
+            await send_or_edit_artwork(event, text, buttons=buttons, artwork_path=None)
             await event.answer()
             return
 
@@ -408,7 +425,7 @@ class StatusCommandHandler:
                     page = 1
 
             text, buttons = self.format_artists_view(page=page)
-            await event.edit(text, buttons=buttons)
+            await send_or_edit_artwork(event, text, buttons=buttons, artwork_path=None)
             await event.answer()
             return
 
@@ -425,7 +442,7 @@ class StatusCommandHandler:
                     page = 1
 
             text, buttons = self.format_albums_view(page=page)
-            await event.edit(text, buttons=buttons)
+            await send_or_edit_artwork(event, text, buttons=buttons, artwork_path=None)
             await event.answer()
             return
 

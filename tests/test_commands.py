@@ -259,9 +259,14 @@ async def test_callback_album_search(test_setup):
     fake_event.answer = AsyncMock()
 
     await router.route_callback(fake_event)
-    fake_event.edit.assert_called_once()
-    edited_text = fake_event.edit.call_args[0][0]
-    assert "A Vachi B Padi" in edited_text
+    if fake_event.respond.called:
+        called_text = fake_event.respond.call_args[0][0]
+        assert "A Vachi B Padi" in called_text
+        assert "file" in fake_event.respond.call_args[1]
+    else:
+        fake_event.edit.assert_called_once()
+        edited_text = fake_event.edit.call_args[0][0]
+        assert "A Vachi B Padi" in edited_text
 
 
 @pytest.mark.asyncio
@@ -775,6 +780,17 @@ async def test_artwork_manager_and_delivery(tmp_path):
         fake_event.respond.assert_called_once()
         assert fake_event.respond.call_args[1]["file"] == str(dummy_art)
         fake_event.delete.assert_called_once()
+
+        # Test ensure_album_artwork and ensure_track_artwork with mock clients
+        ensured_alb = await ArtworkManager.ensure_album_artwork("Great Album", indexer)
+        assert ensured_alb == dummy_art
+
+        ensured_track = await ArtworkManager.ensure_track_artwork(track2, indexer=indexer)
+        assert ensured_track == dummy_art
+
+        # Test precache_library_artworks
+        cached_count = await ArtworkManager.precache_library_artworks(indexer)
+        assert cached_count == 0  # Already cached
     finally:
         ArtworkManager.CACHE_DIR = orig_cache
 

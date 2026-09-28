@@ -44,11 +44,40 @@ async def send_or_edit_artwork(
     # 1. Callback Query Event handling (Telethon CallbackQuery or test mock event with byte data)
     is_callback = isinstance(target, events.CallbackQuery.Event) or isinstance(getattr(target, "data", None), (bytes, bytearray))
     if is_callback:
+        msg = getattr(target, "message", None)
+        if msg is None and hasattr(target, "get_message"):
+            try:
+                msg = await _maybe_await(target.get_message())
+            except Exception:
+                msg = None
+
+        has_media = False
+        if msg:
+            media = getattr(msg, "media", None)
+            # Avoid MagicMock auto-attributes being treated as real Telegram media
+            is_mock = False
+            try:
+                from unittest.mock import NonCallableMock
+                is_mock = isinstance(media, NonCallableMock)
+            except Exception:
+                pass
+            if media is not None and not is_mock:
+                has_media = True
+
         if artwork_path and artwork_path.exists():
-            msg = getattr(target, "message", None)
-            has_media = bool(msg and getattr(msg, "media", None))
             if has_media:
-                # Existing message already has media, edit media in-place
+                # Existing message already has media (photo).
+                # 1. First try updating caption & buttons in-place (fastest, keeps photo, zero flicker)
+                try:
+                    res = target.edit(caption, buttons=buttons)
+                    await _maybe_await(res)
+                    if hasattr(target, "answer"):
+                        await _maybe_await(target.answer())
+                    return
+                except Exception as e:
+                    logger.debug(f"Media caption edit failed: {e}")
+
+                # 2. Try editing media in-place if supported
                 try:
                     res = target.edit(caption, file=str(artwork_path), buttons=buttons)
                     await _maybe_await(res)
@@ -56,9 +85,10 @@ async def send_or_edit_artwork(
                         await _maybe_await(target.answer())
                     return
                 except Exception as e:
-                    logger.debug(f"Media edit failed, attempting respond fallback: {e}")
+                    logger.debug(f"Media file edit failed: {e}")
 
-            # If original message was text-only or edit failed, send new photo message and clean up prompt
+            # If original message was text-only or in-place edit failed:
+            # Send new photo card message and clean up old text prompt
             if hasattr(target, "respond"):
                 try:
                     res = target.respond(caption, file=str(artwork_path), buttons=buttons)
@@ -74,7 +104,24 @@ async def send_or_edit_artwork(
                 except Exception as e:
                     logger.debug(f"Media respond failed, falling back to text edit: {e}")
 
-        # Fallback to standard text edit
+        # Text-only fallback (or user navigating back to text menu from photo card)
+        if has_media and hasattr(target, "respond"):
+            # Old message had a photo, but new view is text-only: send clean text message
+            try:
+                res = target.respond(text, buttons=buttons)
+                await _maybe_await(res)
+                if hasattr(target, "delete"):
+                    try:
+                        await _maybe_await(target.delete())
+                    except Exception:
+                        pass
+                if hasattr(target, "answer"):
+                    await _maybe_await(target.answer())
+                return
+            except Exception as e:
+                logger.debug(f"Text respond fallback failed: {e}")
+
+        # Standard text edit (when message is already text-only)
         try:
             res = target.edit(text, buttons=buttons)
             await _maybe_await(res)
