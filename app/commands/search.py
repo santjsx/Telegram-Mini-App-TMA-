@@ -118,6 +118,44 @@ class SearchCommandHandler:
                 await event.edit(msg_text, buttons=buttons)
             return
 
+        # Basket multi-select toggle: s:b:<page>:<mask_int>:<toggle_idx>:<query>
+        if action == "b":
+            b_parts = data.split(":", 5)
+            if len(b_parts) >= 6:
+                page = int(b_parts[2])
+                mask = int(b_parts[3])
+                toggle = int(b_parts[4])
+                query = b_parts[5]
+                if toggle > 0:
+                    mask ^= (1 << (toggle - 1))
+                all_tracks = self.indexer.get_all_tracks()
+                result = SearchEngine.search(query, all_tracks, page=page, page_size=PAGE_SIZE)
+                msg_text, buttons = self._format_page(result, basket_mask=mask)
+                await event.edit(msg_text, buttons=buttons)
+                await event.answer()
+                return
+
+        # Basket download selected: s:bdl:<page>:<mask_int>:<query>
+        if action == "bdl":
+            b_parts = data.split(":", 4)
+            if len(b_parts) >= 5:
+                page = int(b_parts[2])
+                mask = int(b_parts[3])
+                query = b_parts[4]
+                all_tracks = self.indexer.get_all_tracks()
+                result = SearchEngine.search(query, all_tracks, page=page, page_size=PAGE_SIZE)
+                selected = [t for idx, t in enumerate(result.tracks) if (mask & (1 << idx))]
+                if not selected:
+                    await event.answer("⚠️ No tracks selected. Tap checkboxes first.", alert=True)
+                    return
+                await event.answer(f"Queued {len(selected)} selected track(s) for delivery!")
+                await self.job_manager.start_delivery_job(
+                    owner_id=event.sender_id,
+                    query=f"Selected {len(selected)} tracks of '{query}'",
+                    tracks=selected,
+                )
+                return
+
         # Format for dl and p: s:<action>:<page>:<query>
         if len(parts) < 4:
             await event.answer("Invalid request.", alert=True)
@@ -188,7 +226,7 @@ class SearchCommandHandler:
             ])
         return "\n".join(lines), buttons
 
-    def _format_page(self, result) -> tuple[str, list[list[Button]]]:
+    def _format_page(self, result, basket_mask: Optional[int] = None) -> tuple[str, list[list[Button]]]:
         query_str = (result.query or "").strip()
         q_lower = query_str.lower()
         if q_lower.startswith("album:"):
@@ -204,6 +242,9 @@ class SearchCommandHandler:
             header = "⭐ **Favorite Tracks**"
         else:
             header = f"🔍 **Search Results for:** `{query_str}`"
+
+        # Safe query length in callback (Telegram limit is 64 bytes for callback_data)
+        safe_query = (result.query or "")[:35]
 
         # If only 1 track matched, show a direct high-visibility download card
         if result.total_count == 1:
@@ -229,7 +270,6 @@ class SearchCommandHandler:
             specs.append(quality)
             lines.append(f"   {' · '.join(specs)}\n")
 
-            safe_q = (result.query or "")[:35]
             fav_label = "⭐ Star Favorite" if not only_track.is_favorite else "⭐ Unstar"
             buttons = [
                 [
@@ -239,8 +279,8 @@ class SearchCommandHandler:
                     )
                 ],
                 [
-                    Button.inline(fav_label, data=f"s:fav:{only_track.message_id}:{safe_q}".encode("utf-8")),
-                    Button.inline("ℹ️ Audio Specs", data=f"s:info:{only_track.message_id}:{safe_q}".encode("utf-8")),
+                    Button.inline(fav_label, data=f"s:fav:{only_track.message_id}:{safe_query}".encode("utf-8")),
+                    Button.inline("ℹ️ Audio Specs", data=f"s:info:{only_track.message_id}:{safe_query}".encode("utf-8")),
                 ],
                 [
                     Button.inline("📚 Back to Library", data=b"lib:overview")
@@ -249,10 +289,17 @@ class SearchCommandHandler:
             return "\n".join(lines), buttons
 
         # Multi-track layout
-        lines = [
-            header,
-            f"Found **{result.total_count}** tracks · Page **{result.page}** of **{result.total_pages}**\n",
-        ]
+        if basket_mask is not None:
+            sel_count = bin(basket_mask).count("1")
+            lines = [
+                f"{header} · **Selection Mode**",
+                f"Tap checkboxes to select songs ({sel_count} selected):\n",
+            ]
+        else:
+            lines = [
+                header,
+                f"Found **{result.total_count}** tracks · Page **{result.page}** of **{result.total_pages}**\n",
+            ]
 
         start_num = (result.page - 1) * result.page_size + 1
         track_buttons: list[Button] = []
@@ -288,10 +335,23 @@ class SearchCommandHandler:
             lines.append("\n".join(item_lines) + "\n")
 
             # 2 buttons per row, showing number and clean title preview
-            short_btn_title = clean_title[:14].strip()
-            track_buttons.append(
-                Button.inline(f"📥 {i}. {short_btn_title}", data=f"s:one:{t.message_id}".encode("utf-8"))
-            )
+            short_btn_title = clean_title[:13].strip()
+            idx_in_page = i - start_num
+
+            if basket_mask is not None:
+                is_selected = bool(basket_mask & (1 << idx_in_page))
+                box = "☑️" if is_selected else "⬜"
+                track_buttons.append(
+                    Button.inline(
+                        f"{box} {i}. {short_btn_title}",
+                        data=f"s:b:{result.page}:{basket_mask}:{idx_in_page + 1}:{safe_query}".encode("utf-8"),
+                    )
+                )
+            else:
+                track_buttons.append(
+                    Button.inline(f"📥 {i}. {short_btn_title}", data=f"s:one:{t.message_id}".encode("utf-8"))
+                )
+
             if len(track_buttons) == 2:
                 track_rows.append(track_buttons)
                 track_buttons = []
@@ -302,35 +362,47 @@ class SearchCommandHandler:
         buttons: list[list[Button]] = []
         buttons.extend(track_rows)
 
-        # Safe query length in callback (Telegram limit is 64 bytes for callback_data)
-        safe_query = result.query[:45]
+        if basket_mask is None:
+            nav_row: list[Button] = []
+            if result.has_prev_page:
+                nav_row.append(
+                    Button.inline("◀️ Prev", data=f"s:p:{result.page - 1}:{safe_query}".encode("utf-8"))
+                )
+            if result.total_pages > 1:
+                nav_row.append(
+                    Button.inline(f"📄 {result.page} / {result.total_pages}", data=b"s:noop")
+                )
+            if result.has_next_page:
+                nav_row.append(
+                    Button.inline("Next ▶️", data=f"s:p:{result.page + 1}:{safe_query}".encode("utf-8"))
+                )
 
-        nav_row: list[Button] = []
-        if result.has_prev_page:
-            nav_row.append(
-                Button.inline("◀️ Prev", data=f"s:p:{result.page - 1}:{safe_query}".encode("utf-8"))
-            )
-        if result.total_pages > 1:
-            nav_row.append(
-                Button.inline(f"📄 {result.page} / {result.total_pages}", data=b"s:noop")
-            )
-        if result.has_next_page:
-            nav_row.append(
-                Button.inline("Next ▶️", data=f"s:p:{result.page + 1}:{safe_query}".encode("utf-8"))
-            )
+            if nav_row:
+                buttons.append(nav_row)
 
-        if nav_row:
-            buttons.append(nav_row)
-
-        # Action row: Download Page & Back to Library
-        action_row: list[Button] = [
-            Button.inline(
-                f"⚡ Download Page ({len(result.tracks)})",
-                data=f"s:dl:{result.page}:{safe_query}".encode("utf-8"),
-            ),
-            Button.inline("📚 Library", data=b"lib:overview"),
-        ]
-        buttons.append(action_row)
+            # Action rows: Download Page, Select Tracks, Library
+            buttons.append([
+                Button.inline(
+                    f"⚡ Download Page ({len(result.tracks)})",
+                    data=f"s:dl:{result.page}:{safe_query}".encode("utf-8"),
+                ),
+                Button.inline(
+                    "🧺 Select Tracks",
+                    data=f"s:b:{result.page}:0:0:{safe_query}".encode("utf-8"),
+                ),
+            ])
+            buttons.append([
+                Button.inline("📚 Library", data=b"lib:overview"),
+            ])
+        else:
+            sel_count = bin(basket_mask).count("1")
+            buttons.append([
+                Button.inline(
+                    f"📥 Download Selected ({sel_count})",
+                    data=f"s:bdl:{result.page}:{basket_mask}:{safe_query}".encode("utf-8"),
+                ),
+                Button.inline("✖️ Cancel Selection", data=f"s:p:{result.page}:{safe_query}".encode("utf-8")),
+            ])
 
         return "\n".join(lines), buttons
 

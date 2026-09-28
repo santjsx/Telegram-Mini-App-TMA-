@@ -583,5 +583,60 @@ async def test_handle_inline_query(test_setup):
     assert "mock_article" in fake_inline_event.answer.call_args[0][0]
 
 
+@pytest.mark.asyncio
+async def test_callback_basket_multi_select(test_setup):
+    router, indexer, job_manager = test_setup
+    from app.index.models import Track
+    indexer.add_track(
+        Track(message_id=1, channel_id=-1001, title="Song One", performer="Artist")
+    )
+    indexer.add_track(
+        Track(message_id=2, channel_id=-1001, title="Song Two", performer="Artist")
+    )
+
+    # 1. Enter basket selection mode
+    event_enter = MagicMock()
+    event_enter.data = b"s:b:1:0:0:artist"
+    event_enter.edit = AsyncMock()
+    event_enter.answer = AsyncMock()
+
+    await router.route_callback(event_enter)
+    event_enter.edit.assert_called_once()
+    text_enter = event_enter.edit.call_args[0][0]
+    buttons_enter = event_enter.edit.call_args[1]["buttons"]
+    assert "Selection Mode" in text_enter
+    # Both checkboxes should be empty ⬜
+    assert "⬜ 1." in buttons_enter[0][0].text
+    assert "⬜ 2." in buttons_enter[0][1].text
+
+    # 2. Toggle track 1 checkbox (bit 0 -> mask becomes 1)
+    event_toggle = MagicMock()
+    event_toggle.data = b"s:b:1:0:1:artist"
+    event_toggle.edit = AsyncMock()
+    event_toggle.answer = AsyncMock()
+
+    await router.route_callback(event_toggle)
+    event_toggle.edit.assert_called_once()
+    buttons_toggle = event_toggle.edit.call_args[1]["buttons"]
+    assert "☑️ 1." in buttons_toggle[0][0].text
+    assert "⬜ 2." in buttons_toggle[0][1].text
+
+    # 3. Download selected track
+    job_manager.start_delivery_job = AsyncMock()
+    event_dl = MagicMock()
+    event_dl.data = b"s:bdl:1:1:artist"
+    event_dl.sender_id = 12345
+    event_dl.answer = AsyncMock()
+
+    await router.route_callback(event_dl)
+    event_dl.answer.assert_called_once()
+    assert "Queued 1" in event_dl.answer.call_args[0][0]
+    job_manager.start_delivery_job.assert_called_once()
+    dl_tracks = job_manager.start_delivery_job.call_args[1]["tracks"]
+    assert len(dl_tracks) == 1
+    assert dl_tracks[0].title == "Song One"
+
+
+
 
 
