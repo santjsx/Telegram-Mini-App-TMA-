@@ -205,6 +205,21 @@ class MusicIndexer:
             or (t.filename or "").lower().endswith(".wav")
         ]
 
+    def toggle_favorite(self, message_id: int) -> Optional[bool]:
+        """Toggle favorite state of a track in-memory."""
+        track = self._tracks.get(message_id)
+        if not track:
+            return None
+        track.is_favorite = not track.is_favorite
+        if track.is_favorite:
+            track.tags.add("favorite")
+            self._tag_index.setdefault("favorite", set()).add(message_id)
+        else:
+            track.tags.discard("favorite")
+            if "favorite" in self._tag_index:
+                self._tag_index["favorite"].discard(message_id)
+        return track.is_favorite
+
     def get_favorites_count(self) -> int:
         return sum(1 for t in self._tracks.values() if t.is_favorite)
 

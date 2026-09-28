@@ -498,4 +498,55 @@ async def test_callback_explorer_lossless(test_setup):
     assert "💎 FLAC" in edited_text
 
 
+@pytest.mark.asyncio
+async def test_callback_audio_specs_and_toggle_favorite(test_setup):
+    router, indexer, _ = test_setup
+    from app.index.models import Track
+    indexer.add_track(
+        Track(
+            message_id=99,
+            channel_id=-1001,
+            title="Viva La Vida",
+            performer="Coldplay",
+            album="Viva La Vida",
+            duration=242,
+            file_size=8500000,
+            mime_type="audio/mpeg",
+            is_favorite=False,
+        )
+    )
+
+    # 1. Test Audio Specs Inspector callback
+    fake_event_info = MagicMock()
+    fake_event_info.data = b"s:info:99:coldplay"
+    fake_event_info.edit = AsyncMock()
+    fake_event_info.answer = AsyncMock()
+
+    await router.route_callback(fake_event_info)
+    fake_event_info.edit.assert_called_once()
+    specs_text = fake_event_info.edit.call_args[0][0]
+    assert "Audio Specs & File Inspector" in specs_text
+    assert "Viva La Vida" in specs_text
+    assert "Coldplay" in specs_text
+    assert "8.1 MB" in specs_text or "8.5" in specs_text or "8." in specs_text
+    assert "🎵 MP3" in specs_text
+
+    # 2. Test 1-Tap Toggle Favorite callback (turn ON)
+    fake_event_fav = MagicMock()
+    fake_event_fav.data = b"s:fav:99:coldplay"
+    fake_event_fav.edit = AsyncMock()
+    fake_event_fav.answer = AsyncMock()
+
+    await router.route_callback(fake_event_fav)
+    track = indexer.get_track(99)
+    assert track.is_favorite is True
+    fake_event_fav.answer.assert_called_once()
+    assert "Added to Favorites" in fake_event_fav.answer.call_args[0][0]
+
+    # 3. Toggle favorite OFF
+    await router.route_callback(fake_event_fav)
+    assert track.is_favorite is False
+
+
+
 

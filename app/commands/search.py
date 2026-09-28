@@ -89,6 +89,35 @@ class SearchCommandHandler:
                 await event.respond(f"❌ Could not deliver **{track.display_title}**.")
             return
 
+        # Audio Specs Inspector
+        if action == "info":
+            msg_id = int(parts[2])
+            return_query = parts[3] if len(parts) > 3 else ""
+            track = self.indexer.get_track(msg_id)
+            if not track:
+                await event.answer("Track not found.", alert=True)
+                return
+            msg_text, buttons = self._format_track_info(track, return_query=return_query)
+            await event.edit(msg_text, buttons=buttons)
+            await event.answer()
+            return
+
+        # 1-Tap Favorite Toggle
+        if action == "fav":
+            msg_id = int(parts[2])
+            return_query = parts[3] if len(parts) > 3 else ""
+            is_fav = self.indexer.toggle_favorite(msg_id)
+            if is_fav is None:
+                await event.answer("Track not found.", alert=True)
+                return
+            status_text = "⭐ Added to Favorites!" if is_fav else "Removed from Favorites."
+            await event.answer(status_text)
+            track = self.indexer.get_track(msg_id)
+            if track:
+                msg_text, buttons = self._format_track_info(track, return_query=return_query)
+                await event.edit(msg_text, buttons=buttons)
+            return
+
         # Format for dl and p: s:<action>:<page>:<query>
         if len(parts) < 4:
             await event.answer("Invalid request.", alert=True)
@@ -118,6 +147,46 @@ class SearchCommandHandler:
         except Exception as e:
             logger.debug(f"Search pagination edit skipped: {e}")
             await event.answer()
+
+    def _format_track_info(self, track, return_query: str = "") -> tuple[str, list[list[Button]]]:
+        clean_title = clean_display_title(track.title or track.display_title)
+        quality = get_audio_badge(track)
+        lines = [
+            "ℹ️ **Audio Specs & File Inspector**\n",
+            f"🎧 **Title:** {clean_title}",
+            f"👤 **Artist:** {track.performer}",
+            f"💿 **Album:** {track.album}",
+            f"🎸 **Genre:** {track.genre}",
+            f"⏱ **Duration:** {track.duration_formatted}",
+            f"💾 **File Size:** {track.file_size_formatted} ({track.file_size:,} bytes)",
+            f"💽 **Codec Quality:** {quality}",
+            f"📁 **Filename:** `{track.filename}`",
+            f"🏷 **MIME Type:** `{track.mime_type}`",
+            f"🆔 **Storage Message:** `{track.message_id}`",
+            f"⭐ **Favorite:** {'Yes ⭐' if track.is_favorite else 'No'}",
+        ]
+        fav_label = "⭐ Add to Favorites" if not track.is_favorite else "⭐ Remove Favorite"
+        safe_query = return_query[:35]
+        buttons = [
+            [
+                Button.inline(
+                    f"📥 Send Audio ({track.file_size_formatted})",
+                    data=f"s:one:{track.message_id}".encode("utf-8"),
+                )
+            ],
+            [
+                Button.inline(fav_label, data=f"s:fav:{track.message_id}:{safe_query}".encode("utf-8")),
+            ],
+        ]
+        if return_query:
+            buttons.append([
+                Button.inline("🔙 Back to Results", data=f"s:p:1:{safe_query}".encode("utf-8"))
+            ])
+        else:
+            buttons.append([
+                Button.inline("📁 Root Explorer", data=b"exp:root")
+            ])
+        return "\n".join(lines), buttons
 
     def _format_page(self, result) -> tuple[str, list[list[Button]]]:
         query_str = (result.query or "").strip()
@@ -160,12 +229,18 @@ class SearchCommandHandler:
             specs.append(quality)
             lines.append(f"   {' · '.join(specs)}\n")
 
+            safe_q = (result.query or "")[:35]
+            fav_label = "⭐ Star Favorite" if not only_track.is_favorite else "⭐ Unstar"
             buttons = [
                 [
                     Button.inline(
                         f"📥 Send Audio ({only_track.file_size_formatted})",
                         data=f"s:one:{only_track.message_id}".encode("utf-8"),
                     )
+                ],
+                [
+                    Button.inline(fav_label, data=f"s:fav:{only_track.message_id}:{safe_q}".encode("utf-8")),
+                    Button.inline("ℹ️ Audio Specs", data=f"s:info:{only_track.message_id}:{safe_q}".encode("utf-8")),
                 ],
                 [
                     Button.inline("📚 Back to Library", data=b"lib:overview")
