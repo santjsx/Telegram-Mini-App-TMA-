@@ -1,4 +1,10 @@
-from app.index.parser import normalize_tag, parse_caption, MetadataParser
+from app.index.parser import (
+    normalize_tag,
+    parse_caption,
+    MetadataParser,
+    clean_display_title,
+    get_audio_badge,
+)
 from app.index.models import Track
 
 
@@ -79,3 +85,31 @@ def test_album_title_normalization():
     track = MetadataParser.extract_track(mock_msg, channel_id=-1004316652121)
     assert track is not None
     assert track.album == "Krishna Gaadi Veera Prema Gaadha"
+
+
+def test_clean_display_title():
+    assert clean_display_title("5.RAYALASEEMA MUDDU BIDDA") == "RAYALASEEMA MUDDU BIDDA"
+    assert clean_display_title("01 - Song Title.mp3") == "Song Title"
+    assert clean_display_title("01. Another Song") == "Another Song"
+    assert clean_display_title("02_Track Name") == "Track Name"
+    assert clean_display_title("[03] Bracket Song") == "Bracket Song"
+    assert clean_display_title("(04) Paren Song") == "Paren Song"
+    assert clean_display_title("1. Song Name") == "Song Name"
+    assert clean_display_title("500 Miles") == "500 Miles"
+    assert clean_display_title("21 Guns") == "21 Guns"
+    assert clean_display_title("1999") == "1999"
+
+
+def test_get_audio_badge():
+    t_flac = Track(message_id=1, channel_id=-1, title="Hi", performer="Artist", mime_type="audio/flac")
+    assert get_audio_badge(t_flac) == "💎 FLAC"
+
+    t_m4a = Track(message_id=2, channel_id=-1, title="Hi", performer="Artist", mime_type="audio/mp4")
+    assert get_audio_badge(t_m4a) == "🎧 M4A"
+
+    t_mp3 = Track(message_id=3, channel_id=-1, title="Hi", performer="Artist", mime_type="audio/mpeg")
+    assert get_audio_badge(t_mp3) == "🎵 MP3"
+
+    t_wav = Track(message_id=4, channel_id=-1, title="Hi", performer="Artist", filename="song.wav")
+    assert get_audio_badge(t_wav) == "💎 WAV"
+

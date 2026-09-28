@@ -237,3 +237,38 @@ class MetadataParser:
                 exc_info=True,
             )
             return None
+
+
+def clean_display_title(raw_title: str) -> str:
+    """Clean ugly track prefixes like '5.', '01 - ', '01. ' from titles."""
+    if not raw_title:
+        return ""
+    cleaned = raw_title.strip()
+    # Strip bracketed or parenthesized track numbers like "[01]", "(1)"
+    cleaned = re.sub(r"^(?:\[\d{1,3}\]|\(\d{1,3}\))\s*", "", cleaned)
+    # Strip leading zero track numbers like "01 Song", "01. Song", "01 - Song"
+    cleaned = re.sub(r"^0\d+[\s._-]+", "", cleaned)
+    # Strip numbered prefixes with punctuation like "5.RAYALASEEMA", "1. Song", "1 - Song", "12_Song"
+    cleaned = re.sub(r"^\d{1,3}(?:\.|\s*[-_]\s*)", "", cleaned)
+    # Strip trailing file extensions if left in title
+    cleaned = re.sub(r"\.(mp3|flac|m4a|wav|aac|opus|ogg)$", "", cleaned, flags=re.IGNORECASE).strip()
+    return cleaned if cleaned else raw_title
+
+
+def get_audio_badge(track: Track) -> str:
+    """Return a premium quality badge based on mime type, filename, or size."""
+    filename_lower = (track.filename or "").lower()
+    mime_lower = (track.mime_type or "").lower()
+
+    if "flac" in mime_lower or filename_lower.endswith(".flac"):
+        return "💎 FLAC"
+    if "wav" in mime_lower or filename_lower.endswith(".wav"):
+        return "💎 WAV"
+    if "m4a" in mime_lower or filename_lower.endswith(".m4a") or "mp4" in mime_lower or "aac" in mime_lower:
+        return "🎧 M4A"
+    if "opus" in mime_lower or filename_lower.endswith(".opus") or "ogg" in mime_lower:
+        return "🎧 Opus"
+    if "mp3" in mime_lower or "mpeg" in mime_lower or filename_lower.endswith(".mp3"):
+        return "🎵 MP3"
+    return "🎵 Audio"
+

@@ -352,3 +352,62 @@ async def test_route_albums_button_and_command(test_setup):
     assert "Albums in Your Library" in msg_cmd.reply.call_args[0][0]
     assert "Masterpiece" in msg_cmd.reply.call_args[0][0]
 
+
+@pytest.mark.asyncio
+async def test_search_format_page_layout(test_setup):
+    router, indexer, job_manager = test_setup
+    from app.index.models import Track
+    from app.index.search import SearchEngine
+
+    tracks = [
+        Track(
+            message_id=1,
+            channel_id=-1001,
+            title="5.RAYALASEEMA MUDDU BIDDA",
+            performer="Dj Mahendar",
+            album="Remix Album",
+            duration=220,
+            file_size=3800000,
+            mime_type="audio/mpeg",
+        ),
+        Track(
+            message_id=2,
+            channel_id=-1001,
+            title="01 - Annochadu Song",
+            performer="Jagananna Connects",
+            album="Jagan",
+            duration=278,
+            file_size=36500000,
+            mime_type="audio/flac",
+            is_favorite=True,
+        ),
+    ]
+    for t in tracks:
+        indexer.add_track(t)
+
+    search_handler = SearchCommandHandler(indexer, job_manager)
+    res = SearchEngine.search("", tracks, page=1, page_size=6)
+    text, buttons = search_handler._format_page(res)
+
+    # Check that ugly prefix "5." and "01 - " were stripped
+    assert "RAYALASEEMA MUDDU BIDDA" in text
+    assert "5.RAYALASEEMA" not in text
+    assert "Annochadu Song" in text
+    assert "01 - Annochadu" not in text
+
+    # Check emojis and badges
+    assert "🎧" in text
+    assert "👤 *Dj Mahendar*" in text
+    assert "🎵 MP3" in text
+    assert "💎 FLAC" in text
+    assert "⭐" in text  # Track 2 is favorite
+
+    # Check button layout: 2 per row
+    # Row 0: 2 track buttons
+    assert len(buttons[0]) == 2
+    btn1_text = buttons[0][0].text
+    btn2_text = buttons[0][1].text
+    assert "📥 1. RAYALASEEMA" in btn1_text
+    assert "📥 2. Annochadu" in btn2_text
+
+

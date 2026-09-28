@@ -10,6 +10,7 @@ from telethon import Button, events
 from telethon.tl.custom.message import Message
 
 from app.index.search import SearchEngine
+from app.index.parser import clean_display_title, get_audio_badge
 
 if TYPE_CHECKING:
     from app.index.indexer import MusicIndexer
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-PAGE_SIZE = 10
+PAGE_SIZE = 6
 
 
 class SearchCommandHandler:
@@ -60,6 +61,10 @@ class SearchCommandHandler:
     async def handle_callback(self, event: events.CallbackQuery.Event) -> None:
         data = event.data.decode("utf-8")
         if not data.startswith("s:"):
+            return
+
+        if data in {"s:noop", "s:p:noop"}:
+            await event.answer()
             return
 
         parts = data.split(":", 3)
@@ -131,13 +136,48 @@ class SearchCommandHandler:
         else:
             header = f"🔍 **Search Results for:** `{query_str}`"
 
+        # If only 1 track matched, show a direct high-visibility download card
         if result.total_count == 1:
-            lines = [f"{header}\nFound **1** track:\n"]
-        else:
+            only_track = result.tracks[0]
+            fav = " ⭐" if only_track.is_favorite else ""
+            clean_title = clean_display_title(only_track.title or only_track.display_title)
+            quality = get_audio_badge(only_track)
+
             lines = [
-                header,
-                f"Found **{result.total_count}** tracks · Page **{result.page}** of **{result.total_pages}**\n",
+                f"{header}\nFound **1** track in your library:\n",
+                f"🎧 **{clean_title}**{fav}",
             ]
+            if only_track.performer and only_track.performer != "Unknown Artist":
+                lines.append(f"   👤 *{only_track.performer}*")
+            if only_track.album and only_track.album != "Unknown Album":
+                lines.append(f"   💿 *{only_track.album}*")
+
+            specs = []
+            if only_track.duration_formatted:
+                specs.append(f"⏱ {only_track.duration_formatted}")
+            if only_track.file_size_formatted:
+                specs.append(f"💾 {only_track.file_size_formatted}")
+            specs.append(quality)
+            lines.append(f"   {' · '.join(specs)}\n")
+
+            buttons = [
+                [
+                    Button.inline(
+                        f"📥 Send Audio ({only_track.file_size_formatted})",
+                        data=f"s:one:{only_track.message_id}".encode("utf-8"),
+                    )
+                ],
+                [
+                    Button.inline("📚 Back to Library", data=b"lib:overview")
+                ],
+            ]
+            return "\n".join(lines), buttons
+
+        # Multi-track layout
+        lines = [
+            header,
+            f"Found **{result.total_count}** tracks · Page **{result.page}** of **{result.total_pages}**\n",
+        ]
 
         start_num = (result.page - 1) * result.page_size + 1
         track_buttons: list[Button] = []
@@ -145,25 +185,39 @@ class SearchCommandHandler:
 
         for i, t in enumerate(result.tracks, start=start_num):
             fav = " ⭐" if t.is_favorite else ""
-            title = t.title or t.display_title
+            raw_title = t.title or t.display_title
+            clean_title = clean_display_title(raw_title)
             performer = t.performer if t.performer and t.performer != "Unknown Artist" else ""
+            album = t.album if t.album and t.album != "Unknown Album" else ""
+            quality = get_audio_badge(t)
 
-            meta_parts = []
-            if t.duration_formatted:
-                meta_parts.append(t.duration_formatted)
-            if t.file_size_formatted:
-                meta_parts.append(t.file_size_formatted)
-            meta_str = f" ({' · '.join(meta_parts)})" if meta_parts else ""
+            num_str = f"{i:02d}" if result.total_count >= 10 else f"{i}"
+            item_lines = [f"🎧 **{num_str}. {clean_title}**{fav}"]
 
+            meta_details = []
             if performer:
-                lines.append(f"**{i}.** **{title}**{fav} — *{performer}*{meta_str}")
-            else:
-                lines.append(f"**{i}.** **{title}**{fav}{meta_str}")
+                meta_details.append(f"👤 *{performer}*")
+            if album and album.lower() != clean_title.lower():
+                meta_details.append(f"💿 *{album}*")
+            if meta_details:
+                item_lines.append(f"    {' · '.join(meta_details)}")
 
+            specs = []
+            if t.duration_formatted:
+                specs.append(f"⏱ {t.duration_formatted}")
+            if t.file_size_formatted:
+                specs.append(f"💾 {t.file_size_formatted}")
+            specs.append(quality)
+            item_lines.append(f"    {' · '.join(specs)}")
+
+            lines.append("\n".join(item_lines) + "\n")
+
+            # 2 buttons per row, showing number and clean title preview
+            short_btn_title = clean_title[:14].strip()
             track_buttons.append(
-                Button.inline(f"📥 {i}", data=f"s:one:{t.message_id}".encode("utf-8"))
+                Button.inline(f"📥 {i}. {short_btn_title}", data=f"s:one:{t.message_id}".encode("utf-8"))
             )
-            if len(track_buttons) == 3:
+            if len(track_buttons) == 2:
                 track_rows.append(track_buttons)
                 track_buttons = []
 
@@ -171,22 +225,6 @@ class SearchCommandHandler:
             track_rows.append(track_buttons)
 
         buttons: list[list[Button]] = []
-
-        # If only 1 track matched, show a direct high-visibility download button
-        if result.total_count == 1:
-            only_track = result.tracks[0]
-            buttons.append([
-                Button.inline(
-                    f"📥 Send Audio ({only_track.file_size_formatted})",
-                    data=f"s:one:{only_track.message_id}".encode("utf-8"),
-                )
-            ])
-            buttons.append([
-                Button.inline("📚 Back to Library", data=b"lib:overview")
-            ])
-            return "\n".join(lines), buttons
-
-        # Multi-track layout
         buttons.extend(track_rows)
 
         # Safe query length in callback (Telegram limit is 64 bytes for callback_data)
@@ -195,20 +233,24 @@ class SearchCommandHandler:
         nav_row: list[Button] = []
         if result.has_prev_page:
             nav_row.append(
-                Button.inline("⬅️ Prev", data=f"s:p:{result.page - 1}:{safe_query}".encode("utf-8"))
+                Button.inline("◀️ Prev", data=f"s:p:{result.page - 1}:{safe_query}".encode("utf-8"))
+            )
+        if result.total_pages > 1:
+            nav_row.append(
+                Button.inline(f"📄 {result.page} / {result.total_pages}", data=b"s:noop")
             )
         if result.has_next_page:
             nav_row.append(
-                Button.inline("➡️ Next", data=f"s:p:{result.page + 1}:{safe_query}".encode("utf-8"))
+                Button.inline("Next ▶️", data=f"s:p:{result.page + 1}:{safe_query}".encode("utf-8"))
             )
 
         if nav_row:
             buttons.append(nav_row)
 
-        # Action row: Download All & Back to Library
+        # Action row: Download Page & Back to Library
         action_row: list[Button] = [
             Button.inline(
-                f"📥 Download All ({len(result.tracks)} tracks)",
+                f"⚡ Download Page ({len(result.tracks)})",
                 data=f"s:dl:{result.page}:{safe_query}".encode("utf-8"),
             ),
             Button.inline("📚 Library", data=b"lib:overview"),

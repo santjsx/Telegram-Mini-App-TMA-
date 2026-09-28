@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 from telethon import Button, events
 from telethon.tl.custom.message import Message
 
+from app.index.parser import clean_display_title, get_audio_badge
+
 if TYPE_CHECKING:
     from app.index.indexer import MusicIndexer
     from app.telegram.connection import TelegramConnectionManager
@@ -124,7 +126,8 @@ class StatusCommandHandler:
 
         inline_buttons = []
         for album, artist, count in page_albums:
-            lines.append(f"• **{album}** — {artist}")
+            track_word = "track" if count == 1 else "tracks"
+            lines.append(f"💿 **{album}**\n    👤 *{artist}* · 🎵 {count} {track_word}\n")
             display_label = f"💿 {album[:16]}"
             prefix = "s:p:1:album:"
             max_bytes = 64 - len(prefix.encode("utf-8"))
@@ -133,21 +136,21 @@ class StatusCommandHandler:
                 Button.inline(display_label, data=f"{prefix}{safe_album}".encode("utf-8"))
             )
 
-        lines.append("\n💡 *Tap an album below to listen:*")
+        lines.append("💡 *Tap an album below to view songs:*")
         btn_rows = [inline_buttons[i:i + 2] for i in range(0, len(inline_buttons), 2)]
 
         if total_pages > 1:
             nav_row = []
             if current_page > 1:
                 nav_row.append(
-                    Button.inline("⬅️ Prev", data=f"lib:albums:{current_page - 1}".encode("utf-8"))
+                    Button.inline("◀️ Prev", data=f"lib:albums:{current_page - 1}".encode("utf-8"))
                 )
             nav_row.append(
-                Button.inline(f"{current_page} / {total_pages}", data=b"lib:noop")
+                Button.inline(f"📄 {current_page} / {total_pages}", data=b"lib:noop")
             )
             if current_page < total_pages:
                 nav_row.append(
-                    Button.inline("➡️ Next", data=f"lib:albums:{current_page + 1}".encode("utf-8"))
+                    Button.inline("Next ▶️", data=f"lib:albums:{current_page + 1}".encode("utf-8"))
                 )
             btn_rows.append(nav_row)
 
@@ -184,7 +187,8 @@ class StatusCommandHandler:
 
         inline_buttons = []
         for name, count in page_artists:
-            lines.append(f"• **{name}** ({count} tracks)")
+            track_word = "track" if count == 1 else "tracks"
+            lines.append(f"🎤 **{name}**\n    🎵 {count} {track_word} in library\n")
             display_label = f"👤 {name[:16]}"
             prefix = "s:p:1:artist:"
             max_bytes = 64 - len(prefix.encode("utf-8"))
@@ -193,21 +197,21 @@ class StatusCommandHandler:
                 Button.inline(display_label, data=f"{prefix}{safe_name}".encode("utf-8"))
             )
 
-        lines.append("\n💡 *Tap an artist below to listen:*")
+        lines.append("💡 *Tap an artist below to view songs:*")
         btn_rows = [inline_buttons[i:i + 2] for i in range(0, len(inline_buttons), 2)]
 
         if total_pages > 1:
             nav_row = []
             if current_page > 1:
                 nav_row.append(
-                    Button.inline("⬅️ Prev", data=f"lib:artists:{current_page - 1}".encode("utf-8"))
+                    Button.inline("◀️ Prev", data=f"lib:artists:{current_page - 1}".encode("utf-8"))
                 )
             nav_row.append(
-                Button.inline(f"{current_page} / {total_pages}", data=b"lib:noop")
+                Button.inline(f"📄 {current_page} / {total_pages}", data=b"lib:noop")
             )
             if current_page < total_pages:
                 nav_row.append(
-                    Button.inline("➡️ Next", data=f"lib:artists:{current_page + 1}".encode("utf-8"))
+                    Button.inline("Next ▶️", data=f"lib:artists:{current_page + 1}".encode("utf-8"))
                 )
             btn_rows.append(nav_row)
 
@@ -244,7 +248,8 @@ class StatusCommandHandler:
 
         inline_buttons = []
         for genre, count in page_genres:
-            lines.append(f"• **{genre}** ({count} tracks)")
+            track_word = "track" if count == 1 else "tracks"
+            lines.append(f"🎸 **#{genre}**\n    🎵 {count} {track_word} in library\n")
             display_label = f"🎸 #{genre[:16]}"
             prefix = "s:p:1:#"
             max_bytes = 64 - len(prefix.encode("utf-8"))
@@ -253,21 +258,21 @@ class StatusCommandHandler:
                 Button.inline(display_label, data=f"{prefix}{safe_genre}".encode("utf-8"))
             )
 
-        lines.append("\n💡 *Tap a genre below to listen:*")
+        lines.append("💡 *Tap a genre below to view songs:*")
         btn_rows = [inline_buttons[i:i + 2] for i in range(0, len(inline_buttons), 2)]
 
         if total_pages > 1:
             nav_row = []
             if current_page > 1:
                 nav_row.append(
-                    Button.inline("⬅️ Prev", data=f"lib:genres:{current_page - 1}".encode("utf-8"))
+                    Button.inline("◀️ Prev", data=f"lib:genres:{current_page - 1}".encode("utf-8"))
                 )
             nav_row.append(
-                Button.inline(f"{current_page} / {total_pages}", data=b"lib:noop")
+                Button.inline(f"📄 {current_page} / {total_pages}", data=b"lib:noop")
             )
             if current_page < total_pages:
                 nav_row.append(
-                    Button.inline("➡️ Next", data=f"lib:genres:{current_page + 1}".encode("utf-8"))
+                    Button.inline("Next ▶️", data=f"lib:genres:{current_page + 1}".encode("utf-8"))
                 )
             btn_rows.append(nav_row)
 
@@ -314,15 +319,32 @@ class StatusCommandHandler:
             if not track:
                 await event.answer("No tracks in library yet.", alert=True)
                 return
-            await event.answer(f"🎲 Picked: {track.display_title[:25]}!")
-            performer = track.performer or 'Unknown Artist'
-            album_str = f"💿 *{track.album}* · " if track.album else ""
-            meta_str = f"({track.duration_formatted} · {track.file_size_formatted})"
-            text = (
-                f"🎲 **Surprise Track Pick:**\n\n"
-                f"**{track.title}** — *{performer}*\n"
-                f"{album_str}{meta_str}"
-            )
+            clean_title = clean_display_title(track.title or track.display_title)
+            await event.answer(f"🎲 Picked: {clean_title[:25]}!")
+            performer = track.performer if track.performer and track.performer != "Unknown Artist" else ""
+            album = track.album if track.album and track.album != "Unknown Album" else ""
+            quality = get_audio_badge(track)
+
+            lines = [
+                "🎲 **Surprise Track Pick:**\n",
+                f"🎧 **{clean_title}**",
+            ]
+            meta_details = []
+            if performer:
+                meta_details.append(f"👤 *{performer}*")
+            if album and album.lower() != clean_title.lower():
+                meta_details.append(f"💿 *{album}*")
+            if meta_details:
+                lines.append(f"   {' · '.join(meta_details)}")
+
+            specs = []
+            if track.duration_formatted:
+                specs.append(f"⏱ {track.duration_formatted}")
+            if track.file_size_formatted:
+                specs.append(f"💾 {track.file_size_formatted}")
+            specs.append(quality)
+            lines.append(f"   {' · '.join(specs)}")
+
             buttons = [
                 [
                     Button.inline(
@@ -335,7 +357,7 @@ class StatusCommandHandler:
                     Button.inline("🔙 Back to Library", data=b"lib:overview"),
                 ],
             ]
-            await event.edit(text, buttons=buttons)
+            await event.edit("\n".join(lines), buttons=buttons)
             return
 
         if action == "noop":
