@@ -49,6 +49,7 @@ class BotManager:
         self._callback_router: Optional[Callable[[events.CallbackQuery.Event], Coroutine[Any, Any, None]]] = None
         self._channel_post_handler: Optional[Callable[[Message], Coroutine[Any, Any, None]]] = None
         self._unauthorized_handler: Optional[Callable[[Message], Coroutine[Any, Any, None]]] = None
+        self._inline_handler: Optional[Callable[[events.InlineQuery.Event], Coroutine[Any, Any, None]]] = None
 
     def set_routers(
         self,
@@ -56,11 +57,13 @@ class BotManager:
         callback_router: Optional[Callable[[events.CallbackQuery.Event], Coroutine[Any, Any, None]]] = None,
         channel_post_handler: Optional[Callable[[Message], Coroutine[Any, Any, None]]] = None,
         unauthorized_handler: Optional[Callable[[Message], Coroutine[Any, Any, None]]] = None,
+        inline_handler: Optional[Callable[[events.InlineQuery.Event], Coroutine[Any, Any, None]]] = None,
     ) -> None:
         self._command_router = command_router
         self._callback_router = callback_router
         self._channel_post_handler = channel_post_handler
         self._unauthorized_handler = unauthorized_handler
+        self._inline_handler = inline_handler
         self._register_handlers()
 
     async def connect(self) -> None:
@@ -248,6 +251,24 @@ class BotManager:
                 except Exception as e:
                     logger.error(f"Error handling callback: {e}", exc_info=True)
                     await event.answer("⚠️ Error processing request.", alert=True)
+
+        @self.client.on(events.InlineQuery())
+        async def handle_inline(event: events.InlineQuery.Event) -> None:
+            is_auth = (
+                self.access_manager.is_authorized(event.sender_id)
+                if self.access_manager
+                else event.sender_id == self.config.authorized_user_id
+            )
+            if not is_auth:
+                await event.answer([], switch_pm="Access Required — Tap to Authorize", switch_pm_param="auth")
+                return
+
+            if self._inline_handler:
+                try:
+                    await self._inline_handler(event)
+                except Exception as e:
+                    logger.error(f"Error handling inline query: {e}", exc_info=True)
+                    await event.answer([])
 
     async def send_message(self, chat_id: int, text: str, **kwargs) -> Message:
         """Send a message to the user."""

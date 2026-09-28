@@ -333,3 +333,63 @@ class SearchCommandHandler:
         buttons.append(action_row)
 
         return "\n".join(lines), buttons
+
+    async def handle_inline_query(self, event: events.InlineQuery.Event) -> None:
+        """Handle live inline queries (@bot <query>) across Telegram."""
+        query = (event.text or "").strip()
+        all_tracks = self.indexer.get_all_tracks()
+        if not all_tracks:
+            await event.answer([], switch_pm="No songs in library yet", switch_pm_param="lib")
+            return
+
+        if not query:
+            tracks = all_tracks[:10]
+        else:
+            result = SearchEngine.search(query, all_tracks, page=1, page_size=10)
+            tracks = result.tracks
+
+        results = []
+        for t in tracks:
+            clean_title = clean_display_title(t.title or t.display_title)
+            quality = get_audio_badge(t)
+            desc_parts = []
+            if t.performer and t.performer != "Unknown Artist":
+                desc_parts.append(t.performer)
+            if t.duration_formatted:
+                desc_parts.append(t.duration_formatted)
+            desc_parts.append(quality)
+            desc = " · ".join(desc_parts)
+
+            msg_lines = [
+                f"🎧 **{clean_title}**",
+            ]
+            if t.performer and t.performer != "Unknown Artist":
+                msg_lines.append(f"👤 *{t.performer}*")
+            if t.album and t.album != "Unknown Album":
+                msg_lines.append(f"💿 *{t.album}*")
+            specs = []
+            if t.duration_formatted:
+                specs.append(f"⏱ {t.duration_formatted}")
+            if t.file_size_formatted:
+                specs.append(f"💾 {t.file_size_formatted}")
+            specs.append(quality)
+            msg_lines.append(f"   {' · '.join(specs)}")
+
+            buttons = [
+                [
+                    Button.inline(
+                        f"📥 Send Audio ({t.file_size_formatted})",
+                        data=f"s:one:{t.message_id}".encode("utf-8"),
+                    )
+                ]
+            ]
+            results.append(
+                event.builder.article(
+                    title=f"🎧 {clean_title}",
+                    description=desc,
+                    text="\n".join(msg_lines),
+                    buttons=buttons,
+                )
+            )
+
+        await event.answer(results, cache_time=5)

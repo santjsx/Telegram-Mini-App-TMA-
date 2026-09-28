@@ -548,5 +548,40 @@ async def test_callback_audio_specs_and_toggle_favorite(test_setup):
     assert track.is_favorite is False
 
 
+@pytest.mark.asyncio
+async def test_handle_inline_query(test_setup):
+    router, indexer, job_manager = test_setup
+    from app.index.models import Track
+    indexer.add_track(
+        Track(
+            message_id=77,
+            channel_id=-1001,
+            title="Yellow",
+            performer="Coldplay",
+            album="Parachutes",
+            duration=269,
+            file_size=6500000,
+            mime_type="audio/mpeg",
+        )
+    )
+
+    search_handler = SearchCommandHandler(indexer, job_manager)
+
+    fake_inline_event = MagicMock()
+    fake_inline_event.text = "yellow"
+    fake_inline_event.answer = AsyncMock()
+    fake_inline_event.builder = MagicMock()
+    fake_inline_event.builder.article = MagicMock(return_value="mock_article")
+
+    await search_handler.handle_inline_query(fake_inline_event)
+
+    fake_inline_event.builder.article.assert_called_once()
+    kwargs = fake_inline_event.builder.article.call_args[1]
+    assert "Yellow" in kwargs["title"]
+    assert "Coldplay" in kwargs["description"]
+    assert "Yellow" in kwargs["text"]
+    assert "mock_article" in fake_inline_event.answer.call_args[0][0]
+
+
 
 

@@ -161,6 +161,7 @@ class TPMCApp:
             callback_router=self.router.route_callback,
             channel_post_handler=handle_new_channel_post,
             unauthorized_handler=self.admin_handler.handle_unauthorized_message,
+            inline_handler=self.search_handler.handle_inline_query,
         )
 
         # 5. Start non-blocking background indexing (Fast Boot) if user client is connected
