@@ -164,6 +164,37 @@ export function App() {
           const data: LibraryData = await res.json();
           setLibrary(data);
           localStorage.setItem('tpmc_library_cache', JSON.stringify(data));
+
+          // Telegram Mini App Deep Linking (startapp=track_123 or album_name)
+          const tg = (window as any).Telegram?.WebApp;
+          const startParam: string =
+            tg?.initDataUnsafe?.start_param ||
+            urlParams.get('startapp') ||
+            urlParams.get('tgWebAppStartParam') ||
+            '';
+
+          if (startParam && data.tracks.length > 0) {
+            if (startParam.startsWith('track_')) {
+              const targetId = parseInt(startParam.slice(6), 10);
+              const found = data.tracks.find((t) => t.id === targetId);
+              if (found) {
+                player.playTrack(found, data.tracks);
+                setIsFullPlayerOpen(true);
+              }
+            } else if (startParam.startsWith('album_')) {
+              const albumName = decodeURIComponent(startParam.slice(6).replace(/_/g, ' ')).toLowerCase();
+              const matchedAlbum = data.albums.find((a) => a.name.toLowerCase() === albumName);
+              if (matchedAlbum) {
+                setSelectedAlbum(matchedAlbum.name);
+              }
+            } else if (startParam.startsWith('artist_')) {
+              const artistName = decodeURIComponent(startParam.slice(7).replace(/_/g, ' ')).toLowerCase();
+              const matchedArtist = data.artists.find((a) => a.name.toLowerCase() === artistName);
+              if (matchedArtist) {
+                setSelectedArtist(matchedArtist.name);
+              }
+            }
+          }
         }
       } catch (err) {
         console.warn('Library refresh notice:', err);

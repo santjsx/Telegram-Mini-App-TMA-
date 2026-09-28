@@ -290,6 +290,24 @@ class BotManager:
             from_peer=from_peer,
         )
 
+    async def configure_menu_button(self, webapp_url: str) -> bool:
+        """Configure Telegram native persistent WebApp Menu Button in the chat bar."""
+        if not webapp_url or not webapp_url.startswith("https://"):
+            return False
+        try:
+            from telethon.tl import functions, types
+            await self.client(
+                functions.bots.SetBotMenuButtonRequest(
+                    user_id=types.InputUserEmpty(),
+                    button=types.BotMenuButton(text="🎧 Web Player", url=webapp_url),
+                )
+            )
+            logger.info(f"Configured persistent Telegram Menu Button WebApp: {webapp_url}")
+            return True
+        except Exception as e:
+            logger.warning(f"Could not configure Telegram Menu Button: {e}")
+            return False
+
     async def disconnect(self) -> None:
         """Disconnect the bot client."""
         if self.client.is_connected():

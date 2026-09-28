@@ -163,6 +163,26 @@ document.addEventListener("DOMContentLoaded", () => {
         setupHero(allTracks[0]);
       }
 
+      // Telegram Mini App Deep Linking (startapp=track_123 or album_name)
+      const urlParams = new URLSearchParams(window.location.search);
+      const startParam = tg?.initDataUnsafe?.start_param || urlParams.get("startapp") || urlParams.get("tgWebAppStartParam") || "";
+      if (startParam && allTracks.length > 0) {
+        if (startParam.startsWith("track_")) {
+          const trackId = parseInt(startParam.slice(6), 10);
+          const idx = currentPlaylist.findIndex(t => t.id === trackId || t.message_id === trackId);
+          if (idx !== -1) {
+            playTrack(idx);
+            openFullPlayer();
+          }
+        } else if (startParam.startsWith("album_")) {
+          const albumName = decodeURIComponent(startParam.slice(6).replace(/_/g, " ")).toLowerCase();
+          const matched = (data.albums || []).find(a => a.name.toLowerCase() === albumName);
+          if (matched) {
+            filterByAlbum(matched.name);
+          }
+        }
+      }
+
       // Update modal stats
       if (modalStatTracks) modalStatTracks.textContent = allTracks.length;
       if (modalStatAlbums) modalStatAlbums.textContent = (data.albums || []).length;

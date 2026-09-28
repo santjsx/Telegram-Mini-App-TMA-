@@ -136,6 +136,10 @@ class TPMCApp:
 
         from app.telegram.connection import ConnectionState
 
+        # Configure Telegram Menu Button WebApp if configured
+        if self.config.webapp_url and self.connection_manager.bot_state == ConnectionState.CONNECTED:
+            await self.bot_manager.configure_menu_button(self.config.webapp_url)
+
         # 3. Validate channel access (only if user client is connected)
         if self.connection_manager.user_state == ConnectionState.CONNECTED:
             try:
