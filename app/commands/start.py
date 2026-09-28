@@ -12,10 +12,10 @@ from telethon.tl.custom.message import Message
 
 def get_main_menu_keyboard():
     return [
-        [Button.text("🎵 Web Player"), Button.text("🔍 Search Music")],
-        [Button.text("📁 File Explorer"), Button.text("📚 My Library")],
-        [Button.text("🎤 Top Artists"), Button.text("💿 Albums")],
-        [Button.text("⭐ Favorites"), Button.text("⚡ Cloud Status")],
+        [Button.text("🎵 Web Player"), Button.text("🔍 Search Songs & Albums")],
+        [Button.text("💿 Browse Albums"), Button.text("🎵 All Songs")],
+        [Button.text("📁 File Explorer"), Button.text("⭐ Favorites")],
+        [Button.text("🎲 Surprise Pick"), Button.text("⚡ Cloud Status")],
     ]
 
 
@@ -38,38 +38,40 @@ def get_webapp_button(url: str, label: str = "🚀 Launch Web Player 🎧"):
 
 START_MESSAGE = """🎵 **Music Cloud • High-Fidelity Streaming (TPMC)**
 
-Welcome to your private cloud music sanctuary. Stream in lossless quality, search instantly, and take your music anywhere.
+Welcome to your private cloud music sanctuary. Stream lossless audio, browse albums with cover art, and take your music anywhere.
 
 🎧 **Web Player Mini App:**
 Tap `🎵 Web Player` below or use the button to launch your luxury dark-mode streaming studio with real-time waveform visualizers and instant seeking!
 
 ✨ **Quick Navigation:**
-• **Web Player:** Tap `🎵 Web Player` for full audio player interface.
-• **Browse Library:** Tap `📚 My Library` to explore Artists, Albums & Genres.
-• **Instant Play:** Simply type any song, artist, or album name directly into the chat!
-• **Offline Access:** Tap the three dots (⋮) on any song to save it to your device.
+• **Browse Albums:** Tap `💿 Browse Albums` to view collections with high-res cover art.
+• **All Songs:** Tap `🎵 All Songs` to list all tracks with quick audio delivery.
+• **Instant Search:** Type any song or album name directly into the chat!
+• **Surprise Pick:** Tap `🎲 Surprise Pick` for an instant curated track pick.
 
-💡 *Use the permanent menu buttons below or type `/library` anytime.*
+💡 *Use the permanent menu buttons below or type `/albums`, `/songs`, or `/library` anytime.*
 """
 
 HELP_MESSAGE = """📖 **Music Cloud Command & Tagging Guide**
 
 **Touch Navigation:**
-• Use the buttons at the bottom of your screen for one-tap access.
-• Type any keyword or song name anytime for instant fuzzy search.
+• Use the permanent menu buttons at the bottom of your screen for one-tap access.
+• Type any song title or album name anytime for instant fuzzy search.
 
 **Search & Playback Commands:**
 • `/player` — Open the luxury Web App streaming player
+• `/albums` — Browse all albums with track counts and cover art
+• `/songs` — View all songs indexed in your cloud (A-Z)
+• `/album <name>` — Directly open an album's tracklist and cover art
 • `/search <title>` — Search songs across your library
-• `/search artist:<name>` — Filter specifically by artist
-• `/search album:<name>` — Filter specifically by album
+• `/search album:<name>` — Filter specifically by album name
 • `/download #<genre>` — Deliver all songs in a genre (e.g. `/download #rock`)
-• `/library` — Open interactive library dashboard
+• `/library` — Open interactive albums and songs dashboard
 • `/status` — View cloud connection & index status
 
 **Channel Tagging Standard:**
 When adding new songs to your storage channel:
-`#artist:Artist_Name #album:Album_Name #genre:Genre #favorite`
+`#album:Album_Name #genre:Genre #favorite`
 """
 
 

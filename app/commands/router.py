@@ -57,20 +57,23 @@ class CommandRouter:
         if raw_text in {"🎵 Web Player", "🎵 Player", "Web Player"}:
             await handle_player(message, self.webapp_url)
             return
-        elif raw_text in {"🔍 Search Music", "🔍 Search"}:
+        elif raw_text in {"🔍 Search Songs & Albums", "🔍 Search Music", "🔍 Search"}:
             text = (
-                "🔍 **Search Your Music Cloud**\n\n"
-                "Type any song title, artist, or album directly into chat.\n\n"
+                "🔍 **Search Songs & Albums**\n\n"
+                "Type any song title or album name directly into chat.\n\n"
                 "💡 **Quick Discover:**"
             )
             buttons = [
                 [
-                    Button.inline("🎲 Surprise Me", data=b"lib:random"),
-                    Button.inline("⭐ Favorites", data=b"lib:favs"),
+                    Button.inline("🎲 Surprise Pick", data=b"lib:random"),
+                    Button.inline("⭐ Favorites", data=b"s:p:1:favorite"),
                 ],
                 [
-                    Button.inline("🎤 Top Artists", data=b"lib:artists"),
-                    Button.inline("💿 Top Albums", data=b"lib:albums"),
+                    Button.inline("💿 Browse Albums", data=b"lib:albums"),
+                    Button.inline("🎵 All Songs", data=b"s:p:1:all"),
+                ],
+                [
+                    Button.inline("📁 File Explorer", data=b"exp:root"),
                 ],
             ]
             await message.reply(text, buttons=buttons)
@@ -84,18 +87,25 @@ class CommandRouter:
         elif raw_text in {"📚 My Library"}:
             await self.status_handler.handle_library(message)
             return
+        elif raw_text in {"💿 Browse Albums", "💿 Albums", "💿 Top Albums"} or command in {"/albums"}:
+            if not self.status_handler.indexer.get_all_albums():
+                await message.reply("💿 No albums indexed in your library yet.")
+            else:
+                text, buttons = self.status_handler.format_albums_view(page=1, back_label="🔙 Open Library")
+                await message.reply(text, buttons=buttons)
+            return
+        elif raw_text in {"🎵 All Songs", "🎵 Songs"} or command in {"/songs"}:
+            message.text = "/search all"
+            await self.search_handler.handle_search(message)
+            return
+        elif raw_text in {"🎲 Surprise Pick", "🎲 Surprise Me"} or command in {"/random"}:
+            await self.status_handler.handle_surprise_pick(message)
+            return
         elif raw_text in {"🎤 Top Artists", "🎤 Artists"} or command in {"/artists"}:
             if not self.status_handler.indexer.get_all_artists():
                 await message.reply("🎤 No artists indexed in your library yet.")
             else:
                 text, buttons = self.status_handler.format_artists_view(page=1, back_label="🔙 Open Library")
-                await message.reply(text, buttons=buttons)
-            return
-        elif raw_text in {"💿 Albums", "💿 Top Albums"} or command in {"/albums"}:
-            if not self.status_handler.indexer.get_all_albums():
-                await message.reply("💿 No albums indexed in your library yet.")
-            else:
-                text, buttons = self.status_handler.format_albums_view(page=1, back_label="🔙 Open Library")
                 await message.reply(text, buttons=buttons)
             return
         elif raw_text in {"🎸 Genres"} or command in {"/genres"}:
@@ -139,6 +149,33 @@ class CommandRouter:
             await self.status_handler.handle_status(message)
         elif command in {"/library"}:
             await self.status_handler.handle_library(message)
+        elif command in {"/albums"}:
+            if not self.status_handler.indexer.get_all_albums():
+                await message.reply("💿 No albums indexed in your library yet.")
+            else:
+                text, buttons = self.status_handler.format_albums_view(page=1, back_label="🔙 Open Library")
+                await message.reply(text, buttons=buttons)
+        elif command in {"/songs"}:
+            message.text = "/search all"
+            await self.search_handler.handle_search(message)
+        elif command.startswith("/album"):
+            parts = raw_text.split(maxsplit=1)
+            if len(parts) > 1:
+                message.text = f"/search album:{parts[1].strip()}"
+                await self.search_handler.handle_search(message)
+            else:
+                text, buttons = self.status_handler.format_albums_view(page=1, back_label="🔙 Open Library")
+                await message.reply(text, buttons=buttons)
+        elif command.startswith("/song"):
+            parts = raw_text.split(maxsplit=1)
+            if len(parts) > 1:
+                message.text = f"/search {parts[1].strip()}"
+                await self.search_handler.handle_search(message)
+            else:
+                message.text = "/search all"
+                await self.search_handler.handle_search(message)
+        elif command in {"/random"}:
+            await self.status_handler.handle_surprise_pick(message)
         elif command in {"/search"}:
             await self.search_handler.handle_search(message)
         elif command in {"/download"}:

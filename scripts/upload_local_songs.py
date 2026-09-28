@@ -449,6 +449,15 @@ async def main() -> None:
                     sys.stdout.write("\n")
                     print(f"   [SUCCESS] Delivered as message ID: {msg.id}")
 
+                    # Automatically cache album cover artwork locally for the bot and web player
+                    try:
+                        from app.index.artwork import ArtworkManager
+                        art = ArtworkManager.cache_artwork_from_file(msg.id, file_path)
+                        if art:
+                            print(f"   🎨 Cached album artwork: {art.name}")
+                    except Exception:
+                        pass
+
                     history.add(file_path.name)
                     save_history(history)
                     uploaded_count += 1

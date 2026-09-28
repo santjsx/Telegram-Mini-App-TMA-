@@ -186,6 +186,18 @@ class MusicIndexer:
             return [a for a in all_albums if not a[0] or not a[0][0].isalpha()]
         return [a for a in all_albums if a[0] and a[0].lower().startswith(letter_lower)]
 
+    def get_tracks_by_album(self, album_name: str) -> List[Track]:
+        """Return all tracks belonging to an album, ordered by track number or title."""
+        target_norm = normalize_string(album_name)
+        m_ids = self._album_index.get(target_norm, set())
+        if not m_ids:
+            for norm_key, ids in self._album_index.items():
+                if target_norm in norm_key or norm_key in target_norm:
+                    m_ids = ids
+                    break
+        tracks = [self._tracks[mid] for mid in m_ids if mid in self._tracks]
+        return sorted(tracks, key=lambda t: (t.title or t.display_title).lower())
+
     def get_recent_tracks(self, limit: int = 10) -> List[Track]:
         """Return the most recently uploaded or indexed tracks."""
         sorted_tracks = sorted(

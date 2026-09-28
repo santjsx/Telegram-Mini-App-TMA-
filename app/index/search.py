@@ -131,7 +131,11 @@ class SearchEngine:
         if query.lower() in {"favorite", "favorites", "fav"}:
             return [t for t in tracks if t.is_favorite]
 
-        # 4. Keyword & Fuzzy Search
+        # 4. All Songs Shortcut
+        if query.lower() in {"all", "#all", "songs", "all_songs", "all tracks"}:
+            return sorted(tracks, key=lambda t: (t.title or t.display_title).lower())
+
+        # 5. Keyword & Fuzzy Search
         keywords = [normalize_string(k) for k in query.split() if k.strip()]
         if not keywords:
             return tracks

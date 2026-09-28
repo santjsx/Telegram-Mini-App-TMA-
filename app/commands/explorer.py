@@ -51,22 +51,22 @@ class ExplorerCommandHandler:
         text = (
             "📁 **Music Cloud Explorer**\n"
             "Browse your personal audio drive like a file manager:\n\n"
-            f"• 🎤 **Artists:** {artists:,} performers\n"
             f"• 💿 **Albums:** {albums:,} collections\n"
-            f"• 🎸 **Genres:** {genres:,} styles\n"
+            f"• 🎵 **All Songs:** {tracks:,} audio files\n"
+            f"• 🎤 **Artists:** {artists:,} performers\n"
             f"• ⭐ **Favorites:** {favs:,} starred songs\n"
             f"• 💎 **Lossless FLAC:** {lossless:,} tracks\n"
-            f"• 🎵 **Total Songs:** {tracks:,} files\n\n"
+            f"• 🎸 **Genres & Tags:** {genres:,} styles\n\n"
             "💡 *Select a folder below to explore:* "
         )
 
         buttons = [
             [
-                Button.inline("🎤 Artists", data=b"exp:art:1"),
-                Button.inline("💿 Albums", data=b"exp:alb:1"),
+                Button.inline("💿 Browse Albums", data=b"exp:alb:1"),
+                Button.inline("🎵 All Songs", data=b"s:p:1:all"),
             ],
             [
-                Button.inline("🎸 Genres", data=b"exp:gnr:1"),
+                Button.inline("🔤 Album A–Z Jump", data=b"exp:az:alb"),
                 Button.inline("⭐ Favorites", data=b"s:p:1:favorite"),
             ],
             [
@@ -74,8 +74,11 @@ class ExplorerCommandHandler:
                 Button.inline("🆕 Recently Added", data=b"exp:recent"),
             ],
             [
-                Button.inline("🔤 A–Z Quick Jump", data=b"exp:az:art"),
+                Button.inline("🎸 Genres & Tags", data=b"exp:gnr:1"),
                 Button.inline("🎲 Surprise Pick", data=b"lib:random"),
+            ],
+            [
+                Button.inline("📚 Library Dashboard", data=b"lib:overview"),
             ],
         ]
         return text, buttons
@@ -83,8 +86,8 @@ class ExplorerCommandHandler:
     # ---------------------------------------------------------
     # A-Z Alphabet Jump View
     # ---------------------------------------------------------
-    def format_az_view(self, target_type: str = "art") -> tuple[str, list[list[Button]]]:
-        title = "Artists" if target_type == "art" else "Albums"
+    def format_az_view(self, target_type: str = "alb") -> tuple[str, list[list[Button]]]:
+        title = "Albums" if target_type == "alb" else "Artists"
         text = (
             f"🔤 **A–Z Alphabet Index · {title}**\n\n"
             "Tap any letter below to instantly jump to that section:"
@@ -221,6 +224,86 @@ class ExplorerCommandHandler:
         return "\n".join(lines), buttons
 
     # ---------------------------------------------------------
+    # Albums Explorer View (with optional letter filter)
+    # ---------------------------------------------------------
+    def format_albums_explorer(
+        self, page: int = 1, letter: Optional[str] = None, page_size: int = 8
+    ) -> tuple[str, list[list[Button]]]:
+        if letter:
+            albums = self.indexer.get_albums_by_letter(letter)
+            header_prefix = f"💿 **Albums starting with '{letter.upper()}'**"
+        else:
+            albums = self.indexer.get_all_albums()
+            header_prefix = "💿 **Albums Directory**"
+
+        if not albums:
+            text = (
+                f"{header_prefix}\n\n"
+                "No albums found matching this filter.\n"
+                "Try browsing another letter or check All Albums."
+            )
+            buttons = [
+                [
+                    Button.inline("🔤 Album A–Z Jump", data=b"exp:az:alb"),
+                    Button.inline("📁 Root Explorer", data=b"exp:root"),
+                ]
+            ]
+            return text, buttons
+
+        total_albums = len(albums)
+        total_pages = max(1, math.ceil(total_albums / page_size))
+        current_page = max(1, min(page, total_pages))
+
+        start_idx = (current_page - 1) * page_size
+        end_idx = start_idx + page_size
+        page_albums = albums[start_idx:end_idx]
+
+        lines = [
+            f"📂 Library > {header_prefix}",
+            f"Page **{current_page}** of **{total_pages}** ({total_albums} collections):\n",
+        ]
+
+        buttons: list[list[Button]] = []
+        item_buttons: list[Button] = []
+
+        for alb, _artist, count in page_albums:
+            track_word = "track" if count == 1 else "tracks"
+            lines.append(f"💿 **{alb}** · 🎵 {count} {track_word}")
+            safe_name = alb[:35].strip()
+            item_buttons.append(
+                Button.inline(f"💿 {alb[:16]}", data=f"s:p:1:album:{safe_name}".encode("utf-8"))
+            )
+            if len(item_buttons) == 2:
+                buttons.append(item_buttons)
+                item_buttons = []
+
+        if item_buttons:
+            buttons.append(item_buttons)
+
+        # Nav row
+        nav_row: list[Button] = []
+        letter_suffix = f":{letter}" if letter else ""
+        if current_page > 1:
+            nav_row.append(
+                Button.inline("◀️ Prev", data=f"exp:alb:{current_page - 1}{letter_suffix}".encode("utf-8"))
+            )
+        nav_row.append(
+            Button.inline(f"📄 {current_page} / {total_pages}", data=b"exp:noop")
+        )
+        if current_page < total_pages:
+            nav_row.append(
+                Button.inline("Next ▶️", data=f"exp:alb:{current_page + 1}{letter_suffix}".encode("utf-8"))
+            )
+        if nav_row:
+            buttons.append(nav_row)
+
+        buttons.append([
+            Button.inline("🔤 Album A–Z Jump", data=b"exp:az:alb"),
+            Button.inline("📁 Root Explorer", data=b"exp:root"),
+        ])
+        return "\n".join(lines), buttons
+
+    # ---------------------------------------------------------
     # Lossless FLAC / WAV Folder
     # ---------------------------------------------------------
     def format_lossless_view(self) -> tuple[str, list[list[Button]]]:
@@ -332,6 +415,14 @@ class ExplorerCommandHandler:
         if sub == "az":
             target = parts[2] if len(parts) > 2 else "art"
             text, buttons = self.format_az_view(target_type=target)
+            await event.edit(text, buttons=buttons)
+            await event.answer()
+            return
+
+        if sub == "alb":
+            page = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 1
+            letter = parts[3] if len(parts) > 3 else None
+            text, buttons = self.format_albums_explorer(page=page, letter=letter)
             await event.edit(text, buttons=buttons)
             await event.answer()
             return

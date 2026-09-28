@@ -7,14 +7,18 @@ from __future__ import annotations
 import logging
 import math
 import os
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Optional
 from telethon import Button, events
 from telethon.tl.custom.message import Message
 
 from app.index.parser import clean_display_title, get_audio_badge
+from app.index.artwork import ArtworkManager
+from app.telegram.artwork import send_or_edit_artwork
 
 if TYPE_CHECKING:
     from app.index.indexer import MusicIndexer
+    from app.index.models import Track
     from app.telegram.connection import TelegramConnectionManager
     from app.jobs.manager import JobManager
 
@@ -35,23 +39,22 @@ class StatusCommandHandler:
     def _get_library_buttons(self) -> list[list[Button]]:
         return [
             [
+                Button.inline("💿 Browse Albums", data=b"lib:albums"),
+                Button.inline("🎵 All Songs", data=b"s:p:1:all"),
+            ],
+            [
                 Button.inline("📁 File Explorer", data=b"exp:root"),
-                Button.inline("🔤 A–Z Index", data=b"exp:az:art"),
+                Button.inline("🔤 Album A–Z Jump", data=b"exp:az:alb"),
             ],
             [
-                Button.inline("🎤 Top Artists", data=b"lib:artists"),
-                Button.inline("💿 Albums", data=b"lib:albums"),
-            ],
-            [
-                Button.inline("🎸 Genres", data=b"lib:genres"),
-                Button.inline("⭐ Favorites", data=b"lib:favs"),
-            ],
-            [
+                Button.inline("⭐ Favorites", data=b"s:p:1:favorite"),
                 Button.inline("💎 Lossless FLAC", data=b"exp:lossless"),
+            ],
+            [
+                Button.inline("🎲 Surprise Pick", data=b"lib:random"),
                 Button.inline("🆕 Recent Tracks", data=b"exp:recent"),
             ],
             [
-                Button.inline("🎲 Surprise Me", data=b"lib:random"),
                 Button.inline("⚡ Cloud Status", data=b"lib:status"),
             ],
         ]
@@ -59,15 +62,16 @@ class StatusCommandHandler:
     def _format_library_overview(self) -> str:
         stats = self.indexer.get_stats()
         index_state = stats.get("state", "UNKNOWN").upper()
+        lossless = len(self.indexer.get_lossless_tracks())
 
         return (
             "📚 **Music Library Overview**\n\n"
-            f"• 🎵 **Tracks:** {stats.get('total_tracks', 0):,} songs\n"
-            f"• 🎤 **Artists:** {stats.get('total_artists', 0):,} performers\n"
             f"• 💿 **Albums:** {stats.get('total_albums', 0):,} collections\n"
-            f"• ⭐ **Favorites:** {stats.get('favorites', 0):,} tracks\n\n"
+            f"• 🎵 **Total Songs:** {stats.get('total_tracks', 0):,} tracks\n"
+            f"• ⭐ **Favorites:** {stats.get('favorites', 0):,} starred tracks\n"
+            f"• 💎 **Lossless FLAC:** {lossless:,} audio files\n\n"
             f"🟢 **Cloud Status:** Online (`{index_state}`)\n"
-            "💡 *Tap any category below to browse your collection.*"
+            "💡 *Select an option below to browse your albums or songs.*"
         )
 
     def _format_status_text(self) -> str:
@@ -133,9 +137,9 @@ class StatusCommandHandler:
             lines = [f"💿 **Albums in Your Library** ({total_albums} total)\n"]
 
         inline_buttons = []
-        for album, artist, count in page_albums:
+        for album, _artist, count in page_albums:
             track_word = "track" if count == 1 else "tracks"
-            lines.append(f"💿 **{album}**\n    👤 *{artist}* · 🎵 {count} {track_word}\n")
+            lines.append(f"💿 **{album}** · 🎵 {count} {track_word}\n")
             display_label = f"💿 {album[:16]}"
             prefix = "s:p:1:album:"
             max_bytes = 64 - len(prefix.encode("utf-8"))
@@ -301,6 +305,67 @@ class StatusCommandHandler:
         buttons = self._get_library_buttons()
         await message.reply(text, buttons=buttons)
 
+    def format_surprise_pick(self, track: Track) -> tuple[str, list[list[Button]], Optional[Path]]:
+        clean_title = clean_display_title(track.title or track.display_title)
+        album = track.album if track.album and track.album != "Unknown Album" else ""
+        quality = get_audio_badge(track)
+
+        lines = [
+            "🎲 **Surprise Track Pick:**\n",
+            f"🎧 **{clean_title}**",
+        ]
+        meta_details = []
+        if album and album.lower() != clean_title.lower():
+            meta_details.append(f"💿 *{album}*")
+        if meta_details:
+            lines.append(f"   {' · '.join(meta_details)}")
+
+        specs = []
+        if track.duration_formatted:
+            specs.append(f"⏱ {track.duration_formatted}")
+        if track.file_size_formatted:
+            specs.append(f"💾 {track.file_size_formatted}")
+        specs.append(quality)
+        lines.append(f"   {' · '.join(specs)}")
+
+        fav_label = "⭐ Star Favorite" if not track.is_favorite else "⭐ Unstar"
+        buttons = [
+            [
+                Button.inline(
+                    f"📥 Send Audio ({track.file_size_formatted})",
+                    data=f"s:one:{track.message_id}".encode("utf-8"),
+                )
+            ],
+            [
+                Button.inline(fav_label, data=f"s:fav:{track.message_id}:lib:random".encode("utf-8")),
+                Button.inline("🎲 Pick Another", data=b"lib:random"),
+            ],
+            [
+                Button.inline("💿 Browse Albums", data=b"lib:albums"),
+                Button.inline("🔙 Back to Library", data=b"lib:overview"),
+            ],
+        ]
+        artwork_path = ArtworkManager.resolve_artwork(track, self.indexer)
+        return "\n".join(lines), buttons, artwork_path
+
+    async def handle_surprise_pick(self, target: Any) -> None:
+        track = self.indexer.get_random_track()
+        if not track:
+            if hasattr(target, "reply"):
+                await target.reply("🎲 No tracks in your library yet! Upload audio first.")
+            elif hasattr(target, "answer"):
+                await target.answer("No tracks in library yet.", alert=True)
+            return
+
+        text, buttons, artwork_path = self.format_surprise_pick(track)
+        clean_title = clean_display_title(track.title or track.display_title)
+        if isinstance(target, events.CallbackQuery.Event):
+            try:
+                await target.answer(f"🎲 Picked: {clean_title[:25]}!")
+            except Exception:
+                pass
+        await send_or_edit_artwork(target, text, buttons=buttons, artwork_path=artwork_path)
+
     async def handle_callback(self, event: events.CallbackQuery.Event) -> None:
         data = event.data.decode("utf-8")
         if not data.startswith("lib:"):
@@ -323,49 +388,7 @@ class StatusCommandHandler:
             return
 
         if action == "random":
-            track = self.indexer.get_random_track()
-            if not track:
-                await event.answer("No tracks in library yet.", alert=True)
-                return
-            clean_title = clean_display_title(track.title or track.display_title)
-            await event.answer(f"🎲 Picked: {clean_title[:25]}!")
-            performer = track.performer if track.performer and track.performer != "Unknown Artist" else ""
-            album = track.album if track.album and track.album != "Unknown Album" else ""
-            quality = get_audio_badge(track)
-
-            lines = [
-                "🎲 **Surprise Track Pick:**\n",
-                f"🎧 **{clean_title}**",
-            ]
-            meta_details = []
-            if performer:
-                meta_details.append(f"👤 *{performer}*")
-            if album and album.lower() != clean_title.lower():
-                meta_details.append(f"💿 *{album}*")
-            if meta_details:
-                lines.append(f"   {' · '.join(meta_details)}")
-
-            specs = []
-            if track.duration_formatted:
-                specs.append(f"⏱ {track.duration_formatted}")
-            if track.file_size_formatted:
-                specs.append(f"💾 {track.file_size_formatted}")
-            specs.append(quality)
-            lines.append(f"   {' · '.join(specs)}")
-
-            buttons = [
-                [
-                    Button.inline(
-                        f"📥 Send Audio ({track.file_size_formatted})",
-                        data=f"s:one:{track.message_id}".encode("utf-8"),
-                    )
-                ],
-                [
-                    Button.inline("🎲 Pick Another", data=b"lib:random"),
-                    Button.inline("🔙 Back to Library", data=b"lib:overview"),
-                ],
-            ]
-            await event.edit("\n".join(lines), buttons=buttons)
+            await self.handle_surprise_pick(event)
             return
 
         if action == "noop":

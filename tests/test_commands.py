@@ -637,6 +637,149 @@ async def test_callback_basket_multi_select(test_setup):
     assert dl_tracks[0].title == "Song One"
 
 
+@pytest.mark.asyncio
+async def test_route_albums_and_songs_commands(test_setup):
+    router, indexer, _ = test_setup
+    from app.index.models import Track
+    indexer.add_track(
+        Track(message_id=1, channel_id=-1001, title="Billie Jean", performer="Michael Jackson", album="Thriller")
+    )
+    indexer.add_track(
+        Track(message_id=2, channel_id=-1001, title="Beat It", performer="Michael Jackson", album="Thriller")
+    )
+
+    # 1. Test "💿 Browse Albums" button
+    msg_alb = DummyMessage("💿 Browse Albums")
+    await router.route_message(msg_alb)
+    msg_alb.reply.assert_called_once()
+    reply_alb = msg_alb.reply.call_args[0][0]
+    assert "Thriller" in reply_alb
+
+    # 2. Test "/albums" command
+    msg_albs = DummyMessage("/albums")
+    await router.route_message(msg_albs)
+    msg_albs.reply.assert_called_once()
+    assert "Thriller" in msg_albs.reply.call_args[0][0]
+
+    # 3. Test "🎵 All Songs" button
+    msg_songs = DummyMessage("🎵 All Songs")
+    await router.route_message(msg_songs)
+    msg_songs.reply.assert_called_once()
+    reply_songs = msg_songs.reply.call_args[0][0]
+    assert "All Songs (A–Z)" in reply_songs
+    assert "Billie Jean" in reply_songs
+    assert "Beat It" in reply_songs
+
+    # 4. Test "/songs" command
+    msg_songs_cmd = DummyMessage("/songs")
+    await router.route_message(msg_songs_cmd)
+    msg_songs_cmd.reply.assert_called_once()
+    assert "All Songs (A–Z)" in msg_songs_cmd.reply.call_args[0][0]
+
+    # 5. Test "/album Thriller" command
+    msg_album_specific = DummyMessage("/album Thriller")
+    await router.route_message(msg_album_specific)
+    msg_album_specific.reply.assert_called_once()
+    assert "Album: Thriller" in msg_album_specific.reply.call_args[0][0]
+
+    # 6. Test "/song Billie Jean" command
+    msg_song_specific = DummyMessage("/song Billie Jean")
+    await router.route_message(msg_song_specific)
+    msg_song_specific.reply.assert_called_once()
+    assert "Billie Jean" in msg_song_specific.reply.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_explorer_albums_directory(test_setup):
+    router, indexer, _ = test_setup
+    from app.index.models import Track
+    indexer.add_track(
+        Track(message_id=1, channel_id=-1001, title="Song A", performer="P", album="Abbey Road")
+    )
+    indexer.add_track(
+        Track(message_id=2, channel_id=-1001, title="Song B", performer="P", album="Bad")
+    )
+
+    # 1. Test exp:alb:1
+    fake_event = MagicMock()
+    fake_event.data = b"exp:alb:1"
+    fake_event.edit = AsyncMock()
+    fake_event.answer = AsyncMock()
+
+    await router.route_callback(fake_event)
+    fake_event.edit.assert_called_once()
+    edit_text = fake_event.edit.call_args[0][0]
+    assert "Albums Directory" in edit_text
+    assert "Abbey Road" in edit_text
+    assert "Bad" in edit_text
+
+    # 2. Test exp:az:alb
+    fake_event_az = MagicMock()
+    fake_event_az.data = b"exp:az:alb"
+    fake_event_az.edit = AsyncMock()
+    fake_event_az.answer = AsyncMock()
+
+    await router.route_callback(fake_event_az)
+    fake_event_az.edit.assert_called_once()
+    az_text = fake_event_az.edit.call_args[0][0]
+    assert "A–Z Alphabet Index · Albums" in az_text
+
+
+@pytest.mark.asyncio
+async def test_artwork_manager_and_delivery(tmp_path):
+    from app.index.models import Track
+    from app.index.indexer import MusicIndexer
+    from app.index.artwork import ArtworkManager
+    from app.telegram.artwork import send_or_edit_artwork
+
+    # Set up dummy cache file
+    cache_dir = tmp_path / "artwork_cache"
+    cache_dir.mkdir(parents=True)
+    dummy_art = cache_dir / "101.jpg"
+    dummy_art.write_bytes(b"dummy_image_data")
+
+    # Monkeypatch CACHE_DIR
+    orig_cache = ArtworkManager.CACHE_DIR
+    ArtworkManager.CACHE_DIR = cache_dir
+    try:
+        indexer = MusicIndexer()
+        track1 = Track(message_id=101, channel_id=-1001, title="Song 1", performer="Artist", album="Great Album")
+        track2 = Track(message_id=102, channel_id=-1001, title="Song 2", performer="Artist", album="Great Album")
+        indexer.add_track(track1)
+        indexer.add_track(track2)
+
+        # Direct track artwork
+        assert ArtworkManager.get_track_artwork(101) == dummy_art
+        assert ArtworkManager.get_track_artwork(102) is None
+
+        # Album artwork resolves from sibling track 101
+        assert ArtworkManager.get_album_artwork("Great Album", indexer) == dummy_art
+        assert ArtworkManager.resolve_artwork(track2, indexer) == dummy_art
+
+        # Test send_or_edit_artwork with Message
+        fake_msg = MagicMock()
+        fake_msg.reply = AsyncMock()
+        await send_or_edit_artwork(fake_msg, "Album View", artwork_path=dummy_art)
+        fake_msg.reply.assert_called_once()
+        assert fake_msg.reply.call_args[1]["file"] == str(dummy_art)
+
+        # Test send_or_edit_artwork with CallbackQuery
+        fake_event = MagicMock()
+        fake_event.data = b"exp:alb:1"
+        fake_event.message.media = None
+        fake_event.respond = AsyncMock()
+        fake_event.delete = AsyncMock()
+        fake_event.answer = AsyncMock()
+
+        await send_or_edit_artwork(fake_event, "Album View", artwork_path=dummy_art)
+        fake_event.respond.assert_called_once()
+        assert fake_event.respond.call_args[1]["file"] == str(dummy_art)
+        fake_event.delete.assert_called_once()
+    finally:
+        ArtworkManager.CACHE_DIR = orig_cache
+
+
+
 
 
 

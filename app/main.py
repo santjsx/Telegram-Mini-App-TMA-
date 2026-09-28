@@ -62,6 +62,7 @@ class TPMCApp:
         self.search_handler = SearchCommandHandler(
             indexer=self.indexer,
             job_manager=self.job_manager,
+            webapp_url=config.webapp_url,
         )
         self.download_handler = DownloadCommandHandler(
             indexer=self.indexer,

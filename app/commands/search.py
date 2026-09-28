@@ -5,12 +5,15 @@ Search command and pagination handler.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Optional
 from telethon import Button, events
 from telethon.tl.custom.message import Message
 
 from app.index.search import SearchEngine
 from app.index.parser import clean_display_title, get_audio_badge
+from app.index.artwork import ArtworkManager
+from app.telegram.artwork import send_or_edit_artwork
 
 if TYPE_CHECKING:
     from app.index.indexer import MusicIndexer
@@ -22,9 +25,15 @@ PAGE_SIZE = 6
 
 
 class SearchCommandHandler:
-    def __init__(self, indexer: MusicIndexer, job_manager: JobManager) -> None:
+    def __init__(
+        self,
+        indexer: MusicIndexer,
+        job_manager: JobManager,
+        webapp_url: Optional[str] = None,
+    ) -> None:
         self.indexer = indexer
         self.job_manager = job_manager
+        self.webapp_url = webapp_url
 
     async def handle_search(self, message: Message) -> None:
         text = message.text.strip()
@@ -40,7 +49,7 @@ class SearchCommandHandler:
                 "Please specify a search term or tag.\n"
                 "Examples:\n"
                 "• `/search rock`\n"
-                "• `/search artist:theweeknd`\n"
+                "• `/search album:Abbey Road`\n"
                 "• `/search #favorite`"
             )
             return
@@ -51,12 +60,21 @@ class SearchCommandHandler:
         if result.total_count == 0:
             await message.reply(
                 f"🔍 No tracks found matching: `{query}`\n\n"
-                "Try a broader keyword or check `/library`."
+                "Try a broader keyword or check `/albums`."
             )
             return
 
         msg_text, buttons = self._format_page(result)
-        await message.reply(msg_text, buttons=buttons)
+
+        artwork_path = None
+        q_lower = query.lower()
+        if q_lower.startswith("album:"):
+            album_name = query[6:].strip()
+            artwork_path = ArtworkManager.get_album_artwork(album_name, self.indexer)
+        elif result.total_count == 1:
+            artwork_path = ArtworkManager.resolve_artwork(result.tracks[0], self.indexer)
+
+        await send_or_edit_artwork(message, msg_text, buttons=buttons, artwork_path=artwork_path)
 
     async def handle_callback(self, event: events.CallbackQuery.Event) -> None:
         data = event.data.decode("utf-8")
@@ -98,8 +116,8 @@ class SearchCommandHandler:
                 await event.answer("Track not found.", alert=True)
                 return
             msg_text, buttons = self._format_track_info(track, return_query=return_query)
-            await event.edit(msg_text, buttons=buttons)
-            await event.answer()
+            artwork_path = ArtworkManager.resolve_artwork(track, self.indexer)
+            await send_or_edit_artwork(event, msg_text, buttons=buttons, artwork_path=artwork_path)
             return
 
         # 1-Tap Favorite Toggle
@@ -179,12 +197,15 @@ class SearchCommandHandler:
 
         # Pagination update
         msg_text, buttons = self._format_page(result)
-        try:
-            await event.edit(msg_text, buttons=buttons)
-            await event.answer()
-        except Exception as e:
-            logger.debug(f"Search pagination edit skipped: {e}")
-            await event.answer()
+        artwork_path = None
+        q_lower = query.lower()
+        if q_lower.startswith("album:"):
+            album_name = query[6:].strip()
+            artwork_path = ArtworkManager.get_album_artwork(album_name, self.indexer)
+        elif result.total_count == 1:
+            artwork_path = ArtworkManager.resolve_artwork(result.tracks[0], self.indexer)
+
+        await send_or_edit_artwork(event, msg_text, buttons=buttons, artwork_path=artwork_path)
 
     def _format_track_info(self, track, return_query: str = "") -> tuple[str, list[list[Button]]]:
         clean_title = clean_display_title(track.title or track.display_title)
@@ -192,17 +213,18 @@ class SearchCommandHandler:
         lines = [
             "ℹ️ **Audio Specs & File Inspector**\n",
             f"🎧 **Title:** {clean_title}",
-            f"👤 **Artist:** {track.performer}",
+        ]
+        if track.performer and track.performer != "Unknown Artist":
+            lines.append(f"👤 **Artist:** {track.performer}")
+        lines.extend([
             f"💿 **Album:** {track.album}",
-            f"🎸 **Genre:** {track.genre}",
             f"⏱ **Duration:** {track.duration_formatted}",
             f"💾 **File Size:** {track.file_size_formatted} ({track.file_size:,} bytes)",
             f"💽 **Codec Quality:** {quality}",
             f"📁 **Filename:** `{track.filename}`",
             f"🏷 **MIME Type:** `{track.mime_type}`",
-            f"🆔 **Storage Message:** `{track.message_id}`",
             f"⭐ **Favorite:** {'Yes ⭐' if track.is_favorite else 'No'}",
-        ]
+        ])
         fav_label = "⭐ Add to Favorites" if not track.is_favorite else "⭐ Remove Favorite"
         safe_query = return_query[:35]
         buttons = [
@@ -229,9 +251,12 @@ class SearchCommandHandler:
     def _format_page(self, result, basket_mask: Optional[int] = None) -> tuple[str, list[list[Button]]]:
         query_str = (result.query or "").strip()
         q_lower = query_str.lower()
-        if q_lower.startswith("album:"):
+        is_album_view = q_lower.startswith("album:")
+        if is_album_view:
             album_name = query_str[6:].strip()
             header = f"💿 **Album: {album_name}**"
+        elif q_lower in ("all", "#all", "songs", "all_songs", "all tracks"):
+            header = "🎵 **All Songs (A–Z)**"
         elif q_lower.startswith("artist:"):
             artist_name = query_str[7:].strip()
             header = f"🎤 **Artist: {artist_name}**"
@@ -257,8 +282,6 @@ class SearchCommandHandler:
                 f"{header}\nFound **1** track in your library:\n",
                 f"🎧 **{clean_title}**{fav}",
             ]
-            if only_track.performer and only_track.performer != "Unknown Artist":
-                lines.append(f"   👤 *{only_track.performer}*")
             if only_track.album and only_track.album != "Unknown Album":
                 lines.append(f"   💿 *{only_track.album}*")
 
@@ -316,13 +339,14 @@ class SearchCommandHandler:
             num_str = f"{i:02d}" if result.total_count >= 10 else f"{i}"
             item_lines = [f"🎧 **{num_str}. {clean_title}**{fav}"]
 
-            meta_details = []
-            if performer:
-                meta_details.append(f"👤 *{performer}*")
-            if album and album.lower() != clean_title.lower():
-                meta_details.append(f"💿 *{album}*")
-            if meta_details:
-                item_lines.append(f"    {' · '.join(meta_details)}")
+            if not is_album_view:
+                meta_details = []
+                if performer:
+                    meta_details.append(f"👤 *{performer}*")
+                if album and album.lower() != clean_title.lower():
+                    meta_details.append(f"💿 *{album}*")
+                if meta_details:
+                    item_lines.append(f"    {' · '.join(meta_details)}")
 
             specs = []
             if t.duration_formatted:
@@ -427,6 +451,8 @@ class SearchCommandHandler:
             desc_parts = []
             if t.performer and t.performer != "Unknown Artist":
                 desc_parts.append(t.performer)
+            if t.album and t.album != "Unknown Album":
+                desc_parts.append(f"💿 {t.album}")
             if t.duration_formatted:
                 desc_parts.append(t.duration_formatted)
             desc_parts.append(quality)
@@ -435,8 +461,6 @@ class SearchCommandHandler:
             msg_lines = [
                 f"🎧 **{clean_title}**",
             ]
-            if t.performer and t.performer != "Unknown Artist":
-                msg_lines.append(f"👤 *{t.performer}*")
             if t.album and t.album != "Unknown Album":
                 msg_lines.append(f"💿 *{t.album}*")
             specs = []
@@ -455,13 +479,25 @@ class SearchCommandHandler:
                     )
                 ]
             ]
-            results.append(
-                event.builder.article(
-                    title=f"🎧 {clean_title}",
-                    description=desc,
-                    text="\n".join(msg_lines),
-                    buttons=buttons,
+            thumb_url = f"{self.webapp_url}/api/artwork/{t.message_id}" if self.webapp_url else None
+            try:
+                results.append(
+                    event.builder.article(
+                        title=f"🎧 {clean_title}",
+                        description=desc,
+                        text="\n".join(msg_lines),
+                        buttons=buttons,
+                        thumb=thumb_url,
+                    )
                 )
-            )
+            except Exception:
+                results.append(
+                    event.builder.article(
+                        title=f"🎧 {clean_title}",
+                        description=desc,
+                        text="\n".join(msg_lines),
+                        buttons=buttons,
+                    )
+                )
 
         await event.answer(results, cache_time=5)
