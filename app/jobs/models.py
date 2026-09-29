@@ -54,13 +54,17 @@ class Job:
 
     def format_progress_message(self) -> str:
         status_name = self.status.value.title()
+        status_badge = "🟢" if self.status == JobStatus.RUNNING else ("✅" if self.status == JobStatus.COMPLETED else "🛑")
         return (
-            f"🎵 **Delivery Job [{self.id}]**\n\n"
-            f"**Query:** `{self.query}`\n"
-            f"**Progress:** {self.completed + self.skipped + self.failed} / {self.total} ({self.progress_pct}%)\n"
-            f"`{self.progress_bar}`\n\n"
-            f"• **Sent:** {self.completed}\n"
-            f"• **Skipped:** {self.skipped}\n"
-            f"• **Failed:** {self.failed}\n\n"
-            f"**Status:** `{status_name}`"
+            "╔══════════════════════════════════╗\n"
+            f"   🚀 ✦ 𝗔𝗨𝗗𝗜𝗢 𝗗𝗘𝗟𝗜𝗩𝗘𝗥𝗬 ✦ 🚀 `[{self.id}]`\n"
+            "╚══════════════════════════════════╝\n\n"
+            f"🎯 **Target:** `{self.query}`\n"
+            f"📊 **Progress:** {self.completed + self.skipped + self.failed} / {self.total} ({self.progress_pct}%)\n"
+            f"`[{self.progress_bar}]`\n\n"
+            f"• 📥 **Delivered:** {self.completed}\n"
+            f"• ⏭️ **Skipped (Cached):** {self.skipped}\n"
+            f"• ⚠️ **Failed:** {self.failed}\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"• **Status:** `{status_name}` {status_badge}"
         )

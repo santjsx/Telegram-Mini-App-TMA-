@@ -53,15 +53,20 @@ class CommandRouter:
 
         logger.info(f"Routing command or query: '{raw_text[:40]}' from sender={message.sender_id}")
 
+        admin_name = getattr(self.admin_handler.config, "admin_name", "Santhosh Reddy")
+
         # 1. Permanent Touch Keyboard Button Mappings
         if raw_text in {"🎵 Web Player", "🎵 Player", "Web Player"}:
-            await handle_player(message, self.webapp_url)
+            await handle_player(message, self.webapp_url, admin_name=admin_name)
             return
         elif raw_text in {"🔍 Search Songs & Albums", "🔍 Search Music", "🔍 Search"}:
             text = (
-                "🔍 **Search Songs & Albums**\n\n"
-                "Type any song title or album name directly into chat.\n\n"
-                "💡 **Quick Discover:**"
+                "╔══════════════════════════════════╗\n"
+                "   🔍 ✦ 𝗦𝗘𝗔𝗥𝗖𝗛 𝗬𝗢𝗨𝗥 𝗟𝗜𝗕𝗥𝗔𝗥𝗬 ✦ 🔍\n"
+                "╚══════════════════════════════════╝\n\n"
+                "Type any song title, artist name, or album directly into chat for instant delivery!\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "💡 **Instant Discovery Portals:**"
             )
             buttons = [
                 [
@@ -119,8 +124,10 @@ class CommandRouter:
             fav_count = self.status_handler.indexer.get_favorites_count()
             if fav_count == 0:
                 await message.reply(
-                    "⭐ **Favorites**\n\n"
-                    "You don't have any songs marked as favorites yet.\n\n"
+                    "╔══════════════════════════════════╗\n"
+                    "   ⭐ ✦ 𝗙𝗔𝗩𝗢𝗥𝗜𝗧𝗘 𝗧𝗥𝗔𝗖𝗞𝗦 ✦ ⭐\n"
+                    "╚══════════════════════════════════╝\n\n"
+                    "You don't have any songs starred as favorites yet.\n\n"
                     "💡 *Add `#favorite` to any song caption in your storage channel to pin it here!*",
                     buttons=[[Button.inline("📚 Open Library", data=b"lib:overview")]],
                 )
@@ -135,14 +142,14 @@ class CommandRouter:
         # Admin-only command gating
         if command in {"/reindex", "/download_all", "/users", "/revoke"}:
             if self.access_manager and not self.access_manager.is_admin(message.sender_id):
-                await message.reply("⚠️ This command is reserved for the bot administrator.")
+                await message.reply(f"⚠️ This command is reserved for the bot administrator ({admin_name}).")
                 return
 
         # 2. Slash Commands
         if command in {"/start"}:
-            await handle_start(message, self.webapp_url)
+            await handle_start(message, self.webapp_url, admin_name=admin_name)
         elif command in {"/player", "/webapp", "/app"}:
-            await handle_player(message, self.webapp_url)
+            await handle_player(message, self.webapp_url, admin_name=admin_name)
         elif command in {"/help"}:
             await handle_help(message)
         elif command in {"/status"}:
@@ -191,7 +198,10 @@ class CommandRouter:
         elif command in {"/revoke"}:
             await self.admin_handler.handle_revoke(message)
         elif command.startswith("/"):
-            await message.reply("❓ Unknown command. Type `/help` to view all available commands.")
+            await message.reply(
+                "❓ **Unknown command.**\n\n"
+                "Type `/help` or use the touch keyboard below to view all available commands."
+            )
         else:
             # 3. Natural Language Search
             # When user sends plain text (e.g. "blinding lights", "coldplay", "#rock"),

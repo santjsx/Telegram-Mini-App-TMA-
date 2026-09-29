@@ -178,6 +178,34 @@ class BotManager:
                     logger.info(f"Successfully configured Telegram WebApp menu button -> {self.config.webapp_url}")
                 except Exception as e:
                     logger.debug(f"Could not set native WebApp menu button: {e}")
+
+            # Auto-sync rich Bot Description ("What can this bot do?" intro screen) & Profile About
+            try:
+                from telethon.tl.functions.bots import SetBotInfoRequest
+                admin_name = getattr(self.config, "admin_name", "Santhosh Reddy")
+                bot_desc = (
+                    "🎧 Welcome to My Music Cloud!\n\n"
+                    f"Your private, luxury high-fidelity music streaming sanctuary inside Telegram curated by {admin_name}.\n\n"
+                    "✨ Key Highlights:\n"
+                    "◈ 💎 Lossless Audio: Studio FLAC & 320kbps MP3 streaming\n"
+                    "◈ 🚀 Web Player Mini App: Real-time visualizers & vinyl deck\n"
+                    "◈ 🔍 Natural Fuzzy Search: Find any song, artist, album, or genre\n"
+                    "◈ 📥 1-Tap Delivery: Instant audio delivery directly to your chat\n"
+                    "◈ 💾 Offline Mode: Save high-res tracks directly to your device\n"
+                    "◈ 🔒 Private & Ad-Free: Exclusive VIP listening without interruptions\n\n"
+                    "Tap 'Start' below to unlock your music sanctuary!"
+                )
+                bot_about = f"Private luxury music streaming cloud curated by {admin_name}. Studio FLAC & Telegram Mini App player."
+                await self.client(
+                    SetBotInfoRequest(
+                        lang_code="",
+                        description=bot_desc,
+                        about=bot_about,
+                    )
+                )
+                logger.info("Successfully updated Telegram bot description & profile info.")
+            except Exception as e:
+                logger.debug(f"Could not set native bot description: {e}")
         except Exception as e:
             logger.warning(f"Could not register Telegram bot commands: {e}")
 

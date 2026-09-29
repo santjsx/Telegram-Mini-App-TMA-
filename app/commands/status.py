@@ -79,47 +79,54 @@ class StatusCommandHandler:
         lossless = len(self.indexer.get_lossless_tracks())
 
         return (
-            "📚 **Music Library Overview**\n\n"
-            f"• 💿 **Albums:** {stats.get('total_albums', 0):,} collections\n"
-            f"• 🎵 **Total Songs:** {stats.get('total_tracks', 0):,} tracks\n"
-            f"• ⭐ **Favorites:** {stats.get('favorites', 0):,} starred tracks\n"
-            f"• 💎 **Lossless FLAC:** {lossless:,} audio files\n\n"
+            "╔══════════════════════════════════════════╗\n"
+            "   📚 ✦ **Music Library Overview** ✦ 📚\n"
+            "╚══════════════════════════════════════════╝\n\n"
+            f"• 💿 **Albums:** {stats.get('total_albums', 0):,} curated collections\n"
+            f"• 🎵 **Total Songs:** {stats.get('total_tracks', 0):,} indexed tracks\n"
+            f"• ⭐ **Starred Tracks:** {stats.get('favorites', 0):,} favorites\n"
+            f"• 💎 **Lossless FLAC:** {lossless:,} studio masters\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🟢 **Cloud Status:** Online (`{index_state}`)\n"
-            "💡 *Select an option below to browse your albums or songs.*"
+            "💡 *Select an option below to browse your library:* "
         )
 
     def _format_status_text(self) -> str:
         conn_summary = self.connection_manager.get_status_summary()
-        tg_status = "Connected" if self.connection_manager.is_connected else "Connecting/Degraded"
-        bot_status = "Online" if conn_summary.get("bot") == "connected" else "Offline"
+        tg_status = "Connected 🟢" if self.connection_manager.is_connected else "Connecting/Degraded 🟡"
+        bot_status = "Online 🟢" if conn_summary.get("bot") == "connected" else "Offline 🔴"
 
         index_stats = self.indexer.get_stats()
         index_state = index_stats.get("state", "UNKNOWN").upper()
         if index_state == "INDEXING":
             indexed = index_stats.get("tracks_indexed", 0)
             scanned = index_stats.get("messages_scanned", 0)
-            index_display = f"Indexing ({indexed} tracks / {scanned} scanned)"
+            index_display = f"Indexing ({indexed} tracks / {scanned} scanned) 🔄"
         else:
-            index_display = index_state
+            index_display = f"{index_state} 🟢"
 
         active_job = self.job_manager.get_active_job()
         if active_job:
-            job_display = f"Running: {active_job.query} ({active_job.completed}/{active_job.total})"
+            job_display = f"Running: {active_job.query} ({active_job.completed}/{active_job.total}) 🚀"
         else:
-            job_display = "None"
+            job_display = "Idle / None 💤"
 
         # Determine runtime host environment
         is_render = bool(os.getenv("RENDER"))
-        host_display = "Render Cloud" if is_render else "Local Server"
+        host_display = "Render Cloud ☁️" if is_render else "Local Server 💻"
 
         return (
-            "📊 **TPMC Status**\n\n"
+            "╔══════════════════════════════════╗\n"
+            "   📊 ✦ **TPMC Status & Cloud Health** ✦ 📊\n"
+            "╚══════════════════════════════════╝\n\n"
             f"• **Telegram:** {tg_status}\n"
             f"• **Bot:** {bot_status}\n"
             f"• **Index:** {index_display}\n"
-            f"• **Tracks:** {index_stats.get('total_tracks', 0):,}\n"
+            f"• **Tracks:** {index_stats.get('total_tracks', 0):,} songs\n"
             f"• **Active Job:** {job_display}\n"
-            f"• **Host:** {host_display} (Online)"
+            f"• **Host:** {host_display}\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "✨ *All streaming pipelines operational!*"
         )
 
     def format_albums_view(

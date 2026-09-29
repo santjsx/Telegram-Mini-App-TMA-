@@ -50,6 +50,9 @@ class Config:
     # WebApp URL
     webapp_url: Optional[str] = None
 
+    # Administrator / Curator profile name
+    admin_name: str = "Santhosh Reddy"
+
     # Optional persistent bot session string (to avoid ImportBotAuthorizationRequest flood waits)
     bot_session: Optional[str] = None
 
@@ -167,6 +170,8 @@ class Config:
             raw_webapp_url = f"http://localhost:{port}"
         webapp_url = raw_webapp_url.rstrip("/")
 
+        admin_name = os.getenv("ADMIN_NAME", "").strip() or "Santhosh Reddy"
+
         bot_session = os.getenv("BOT_SESSION", "").strip() or None
 
         return cls(
@@ -185,5 +190,6 @@ class Config:
             flood_wait_max=flood_wait_max,
             approved_user_ids=approved_user_ids,
             webapp_url=webapp_url,
+            admin_name=admin_name,
             bot_session=bot_session,
         )

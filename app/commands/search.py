@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Any
 from telethon import Button, events
 from telethon.tl.custom.message import Message
 
@@ -59,12 +59,14 @@ class SearchCommandHandler:
 
         if not query:
             await message.reply(
-                "🔍 **TPMC Search**\n\n"
-                "Please specify a search term or tag.\n"
-                "Examples:\n"
-                "• `/search rock`\n"
-                "• `/search album:Abbey Road`\n"
-                "• `/search #favorite`"
+                "╔══════════════════════════════════╗\n"
+                "   🔍 ✦ 𝗜𝗡𝗦𝗧𝗔𝗡𝗧 𝗧𝗥𝗔𝗖𝗞 𝗦𝗘𝗔𝗥𝗖𝗛 ✦ 🔍\n"
+                "╚══════════════════════════════════╝\n\n"
+                "Please specify a song title, artist, album, or tag to search.\n\n"
+                "💡 **Search Syntax Examples:**\n"
+                "• `/search rock` — Search by genre or title keyword\n"
+                "• `/search album:Abbey Road` — Filter by album name\n"
+                "• `/search #favorite` — View your starred tracks"
             )
             return
 
@@ -73,8 +75,9 @@ class SearchCommandHandler:
 
         if result.total_count == 0:
             await message.reply(
-                f"🔍 No tracks found matching: `{query}`\n\n"
-                "Try a broader keyword or check `/albums`."
+                "🔍 **No Matching Tracks Found**\n\n"
+                f"No songs found matching: `{query}` in your library.\n\n"
+                "💡 *Try a broader search term or explore* `/albums` *and* `/songs`."
             )
             return
 

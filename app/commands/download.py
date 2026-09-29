@@ -36,12 +36,14 @@ class DownloadCommandHandler:
 
         if not query:
             await message.reply(
-                "📥 **TPMC Download**\n\n"
-                "Please specify what you would like to download.\n"
-                "Examples:\n"
-                "• `/download rock`\n"
-                "• `/download #artist:linkin_park`\n"
-                "• `/download #favorite`"
+                "╔══════════════════════════════════╗\n"
+                "   📥 ✦ 𝗕𝗔𝗧𝗖𝗛 𝗔𝗨𝗗𝗜𝗢 𝗗𝗘𝗟𝗜𝗩𝗘𝗥𝗬 ✦ 📥\n"
+                "╚══════════════════════════════════╝\n\n"
+                "Please specify tracks or a genre tag to deliver.\n\n"
+                "💡 **Examples:**\n"
+                "• `/download rock` — Deliver all matching songs\n"
+                "• `/download #artist:linkin_park` — Deliver artist discography\n"
+                "• `/download #favorite` — Deliver all starred favorites"
             )
             return
 
@@ -51,8 +53,9 @@ class DownloadCommandHandler:
 
         if result.total_count == 0:
             await message.reply(
-                f"🔍 No tracks found matching: `{query}`\n\n"
-                "Use `/search <query>` to preview or check `/library`."
+                f"🔍 **No Matching Tracks Found**\n\n"
+                f"No tracks found matching `{query}` to deliver.\n\n"
+                "💡 *Use* `/search <query>` *to preview or check* `/library`."
             )
             return
 
@@ -74,10 +77,13 @@ class DownloadCommandHandler:
 
         if not is_confirmed:
             await message.reply(
-                f"⚠️ **Bulk Download Confirmation Required**\n\n"
+                "╔══════════════════════════════════════════╗\n"
+                "   ⚠️ ✦ **Bulk Download Confirmation Required** ✦ ⚠️\n"
+                "╚══════════════════════════════════════════╝\n\n"
                 f"Your library currently contains **{count:,}** tracks.\n"
-                f"This operation will deliver **{count:,}** audio messages to this chat.\n\n"
-                "To confirm and start, send:\n"
+                f"This operation will deliver **{count:,}** audio files directly to this chat.\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "To confirm and begin, send:\n"
                 "`/download_all confirm`"
             )
             return
