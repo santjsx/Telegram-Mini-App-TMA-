@@ -341,8 +341,9 @@ class ArtworkManager:
                 chunks = []
                 total = 0
                 target_size = 384 * 1024
+                chunk_step = 128 * 1024
                 async for chunk in telethon_client.iter_download(
-                    doc, offset=0, request_size=target_size, chunk_size=128 * 1024
+                    doc, offset=0, chunk_size=chunk_step, request_size=chunk_step
                 ):
                     chunks.append(chunk)
                     total += len(chunk)

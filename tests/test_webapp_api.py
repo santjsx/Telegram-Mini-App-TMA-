@@ -439,4 +439,39 @@ async def test_api_stream_download_header(mock_config, populated_indexer):
         await client.close()
 
 
+@pytest.mark.asyncio
+async def test_api_artwork_native_thumb(mock_config, populated_indexer, tmp_path):
+    mock_user_client = MagicMock()
+    mock_msg = MagicMock()
+    mock_msg.document = MagicMock()
+    mock_msg.document.thumbs = [MagicMock()]
 
+    mock_user_client.get_message = AsyncMock(return_value=mock_msg)
+    
+    async def fake_download_media(thumb, file):
+        Path(file).write_bytes(b"\xFF\xD8\xFF\xE0dummy_jpeg_data")
+
+    mock_user_client.client = MagicMock()
+    mock_user_client.client.download_media = AsyncMock(side_effect=fake_download_media)
+
+    server = HealthServer(
+        config=mock_config,
+        indexer=populated_indexer,
+        user_client=mock_user_client,
+    )
+    test_server = TestServer(server.app)
+    client = TestClient(test_server)
+    await client.start_server()
+
+    try:
+        resp = await client.get("/api/artwork/101")
+        assert resp.status == 200
+        assert resp.headers["Content-Type"] == "image/jpeg"
+        body = await resp.read()
+        assert body.startswith(b"\xFF\xD8\xFF\xE0")
+    finally:
+        await client.close()
+        # Clean up test cache
+        cached = Path("data/artwork_cache/101.jpg")
+        if cached.exists():
+            cached.unlink()

@@ -370,12 +370,27 @@ class HealthServer:
                 if not msg or not msg.document:
                     return web.Response(status=404)
 
-                # Download strictly the first 384KB header (never download the entire audio file into RAM)
+                # 1. Native Telegram thumbnail (fastest, lightweight, ~15-30KB)
+                thumbs = getattr(msg.document, "thumbs", None)
+                if thumbs:
+                    try:
+                        await self.user_client.client.download_media(thumbs[0], file=str(cached_file))
+                        if cached_file.exists() and cached_file.stat().st_size > 0:
+                            return web.FileResponse(
+                                cached_file,
+                                headers={"Cache-Control": "public, max-age=604800, immutable"},
+                            )
+                    except Exception as thumb_err:
+                        logger.debug(f"Direct thumbnail download failed for msg {mid}: {thumb_err}")
+
+                # 2. Extract embedded FLAC/ID3 artwork from header
+                # MTProto requires chunk_size/request_size to divide 512KB evenly (e.g. 128KB)
                 chunks = []
                 total = 0
                 target_size = 384 * 1024
+                chunk_step = 128 * 1024
                 async for chunk in self.user_client.client.iter_download(
-                    msg.document, offset=0, request_size=target_size, chunk_size=128 * 1024
+                    msg.document, offset=0, chunk_size=chunk_step, request_size=chunk_step
                 ):
                     chunks.append(chunk)
                     total += len(chunk)
@@ -384,7 +399,7 @@ class HealthServer:
                 data = b"".join(chunks)
 
                 pic_data = None
-                # 1. Try FLAC
+                # Try FLAC
                 try:
                     from mutagen.flac import FLAC
                     fl = FLAC(io.BytesIO(data))
@@ -393,17 +408,21 @@ class HealthServer:
                 except Exception:
                     pass
 
-                # 2. Try MutagenFile (ID3, MP3)
+                # Try MutagenFile (ID3, MP3, M4A)
                 if not pic_data:
                     try:
                         from mutagen import File as MutagenFile
                         mf = MutagenFile(io.BytesIO(data))
                         if hasattr(mf, "pictures") and mf.pictures:
                             pic_data = mf.pictures[0].data
-                        elif mf and mf.tags:
+                        elif mf and getattr(mf, "tags", None):
                             for k in mf.tags.keys():
-                                if k.startswith("APIC"):
-                                    pic_data = mf.tags[k].data
+                                if k.startswith("APIC") or k == "covr":
+                                    val = mf.tags[k]
+                                    if hasattr(val, "data"):
+                                        pic_data = val.data
+                                    elif isinstance(val, list) and len(val) > 0:
+                                        pic_data = bytes(val[0])
                                     break
                     except Exception:
                         pass
@@ -467,8 +486,9 @@ class HealthServer:
             chunks = []
             total = 0
             target_size = 256 * 1024
+            chunk_step = 128 * 1024
             async for chunk in self.user_client.client.iter_download(
-                msg.document, offset=0, request_size=target_size, chunk_size=128 * 1024
+                msg.document, offset=0, chunk_size=chunk_step, request_size=chunk_step
             ):
                 chunks.append(chunk)
                 total += len(chunk)
@@ -692,8 +712,8 @@ class HealthServer:
                 async for chunk in self.user_client.client.iter_download(
                     msg.document,
                     offset=0,
-                    request_size=total_size,
                     chunk_size=CHUNK_SIZE,
+                    request_size=CHUNK_SIZE,
                 ):
                     if total_accumulated < 512 * 1024 and mid not in self._audio_header_cache:
                         accumulated_header.append(chunk)
