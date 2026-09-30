@@ -357,3 +357,86 @@ async def test_api_stream_prefetch(mock_config, populated_indexer):
         await client.close()
 
 
+@pytest.mark.asyncio
+async def test_api_library_authorized_via_api_key(mock_config, populated_indexer):
+    mock_config.api_secret_key = "super_secure_hypr_secret"
+    access_mgr = AccessManager(admin_id=12345, persistence_path="data/test_access.json")
+    server = HealthServer(
+        config=mock_config,
+        indexer=populated_indexer,
+        access_manager=access_mgr,
+    )
+    test_server = TestServer(server.app)
+    client = TestClient(test_server)
+    await client.start_server()
+
+    try:
+        # 1. Unapproved user -> 403
+        resp_unauth = await client.get("/api/library?user_id=99999")
+        assert resp_unauth.status == 403
+
+        # 2. With invalid key -> 403
+        resp_wrong = await client.get("/api/library", headers={"X-Api-Key": "wrong_key"})
+        assert resp_wrong.status == 403
+
+        # 3. With valid X-Api-Key header -> 200
+        resp_valid_header = await client.get("/api/library", headers={"X-Api-Key": "super_secure_hypr_secret"})
+        assert resp_valid_header.status == 200
+        data = await resp_valid_header.json()
+        assert data["total_tracks"] == 1
+        assert data["tracks"][0]["title"] == "Midnight City"
+
+        # 4. With Bearer token -> 200
+        resp_bearer = await client.get("/api/library", headers={"Authorization": "Bearer super_secure_hypr_secret"})
+        assert resp_bearer.status == 200
+
+        # 5. With query parameter token -> 200
+        resp_param = await client.get("/api/library?token=super_secure_hypr_secret")
+        assert resp_param.status == 200
+    finally:
+        await client.close()
+        p = Path("data/test_access.json")
+        if p.exists():
+            p.unlink()
+
+
+@pytest.mark.asyncio
+async def test_api_stream_download_header(mock_config, populated_indexer):
+    mock_config.api_secret_key = "test_key"
+    mock_user_client = MagicMock()
+    mock_msg = MagicMock()
+    mock_msg.document = MagicMock()
+    mock_msg.document.size = 1024
+    mock_msg.document.mime_type = "audio/flac"
+    mock_msg.file = MagicMock()
+    mock_msg.file.name = "midnight_city.flac"
+
+    mock_user_client.get_message = AsyncMock(return_value=mock_msg)
+
+    async def fake_iter(*args, **kwargs):
+        yield b"A" * 512
+        yield b"B" * 512
+
+    mock_user_client.client.iter_download = fake_iter
+
+    server = HealthServer(
+        config=mock_config,
+        indexer=populated_indexer,
+        user_client=mock_user_client,
+    )
+    test_server = TestServer(server.app)
+    client = TestClient(test_server)
+    await client.start_server()
+
+    try:
+        # Download request with download=true
+        resp = await client.get("/api/stream/101?download=true", headers={"X-Api-Key": "test_key"})
+        assert resp.status == 200
+        assert "Content-Disposition" in resp.headers
+        assert 'attachment; filename="midnight_city.flac"' in resp.headers["Content-Disposition"]
+        assert resp.headers.get("Access-Control-Allow-Origin") == "*"
+    finally:
+        await client.close()
+
+
+

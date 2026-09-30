@@ -56,6 +56,9 @@ class Config:
     # Optional persistent bot session string (to avoid ImportBotAuthorizationRequest flood waits)
     bot_session: Optional[str] = None
 
+    # Optional API secret key for mobile clients (HyprMusic) and external integrations
+    api_secret_key: Optional[str] = None
+
     @classmethod
     def load_from_env(cls, env_path: Optional[str] = None) -> Config:
         """
@@ -174,6 +177,8 @@ class Config:
 
         bot_session = os.getenv("BOT_SESSION", "").strip() or None
 
+        api_secret_key = os.getenv("API_SECRET_KEY", "").strip() or None
+
         return cls(
             api_id=api_id,
             api_hash=api_hash,
@@ -192,4 +197,5 @@ class Config:
             webapp_url=webapp_url,
             admin_name=admin_name,
             bot_session=bot_session,
+            api_secret_key=api_secret_key,
         )

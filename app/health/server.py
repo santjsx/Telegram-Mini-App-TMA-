@@ -66,6 +66,27 @@ def verify_telegram_init_data(init_data_str: str, bot_token: str) -> Optional[di
         return None
 
 
+@web.middleware
+async def cors_middleware(request: web.Request, handler: Callable) -> web.StreamResponse:
+    if request.method == "OPTIONS":
+        response = web.Response(status=200)
+    else:
+        try:
+            response = await handler(request)
+        except web.HTTPException as ex:
+            response = ex
+
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, HEAD"
+    response.headers["Access-Control-Allow-Headers"] = (
+        "Content-Type, Authorization, X-User-Id, X-Api-Key, X-Telegram-Init-Data, Range"
+    )
+    response.headers["Access-Control-Expose-Headers"] = (
+        "Content-Range, Content-Length, Accept-Ranges, Content-Disposition"
+    )
+    return response
+
+
 class HealthServer:
     """
     Combined WebApp & Streaming HTTP Server.
@@ -98,7 +119,7 @@ class HealthServer:
         self._audio_chunk_cache: dict[tuple[int, int], bytes] = {}
         self._artwork_sem = asyncio.Semaphore(2)
 
-        self.app = web.Application()
+        self.app = web.Application(middlewares=[cors_middleware])
         self.runner: Optional[web.AppRunner] = None
         self.site: Optional[web.TCPSite] = None
 
@@ -128,10 +149,33 @@ class HealthServer:
         """
         Verify request authorization.
         Checks:
-        1. Telegram-Init-Data header or query parameter (cryptographically verified).
-        2. If no initData and in local development/browser testing:
-           allows access if user_id param is provided or defaults to admin.
+        1. API Secret Key (X-Api-Key header, Authorization Bearer, or ?token= / ?api_key= query param).
+        2. Telegram-Init-Data header or query parameter (cryptographically verified).
+        3. Fallback for mobile / dev / direct testing: check ?user_id= or X-User-Id header.
+        4. If accessed from localhost directly without params (browser test), allow admin access.
         """
+        # 1. API Secret Key check (for HyprMusic Android client and native integrations)
+        auth_header = request.headers.get("Authorization", "")
+        bearer_token = auth_header[7:].strip() if auth_header.startswith("Bearer ") else ""
+        api_key = (
+            request.headers.get("X-Api-Key")
+            or bearer_token
+            or request.query.get("token")
+            or request.query.get("api_key")
+        )
+        if self.config and self.config.api_secret_key and api_key:
+            if hmac.compare_digest(api_key, self.config.api_secret_key):
+                admin_uid = self.access_manager.admin_id if self.access_manager else (self.config.authorized_user_id or 0)
+                raw_uid = request.query.get("user_id") or request.headers.get("X-User-Id")
+                if raw_uid:
+                    try:
+                        return True, int(raw_uid)
+                    except ValueError:
+                        pass
+                return True, admin_uid
+            # Explicit invalid API key provided
+            return False, None
+
         init_data = (
             request.headers.get("X-Telegram-Init-Data")
             or request.query.get("initData")
@@ -490,6 +534,19 @@ class HealthServer:
         mime_type = msg.document.mime_type or "audio/mpeg"
         range_header = request.headers.get("Range")
 
+        is_download = request.query.get("download") in ("true", "1")
+        download_filename = None
+        if is_download:
+            if hasattr(msg, "file") and getattr(msg.file, "name", None):
+                download_filename = msg.file.name
+            elif self.indexer:
+                indexed_track = self.indexer.get_track(mid)
+                if indexed_track and indexed_track.filename:
+                    download_filename = indexed_track.filename
+            if not download_filename:
+                ext = mime_type.split("/")[-1].replace("mpeg", "mp3")
+                download_filename = f"track_{mid}.{ext}"
+
         CHUNK_SIZE = 128 * 1024
 
         if range_header:
@@ -512,16 +569,19 @@ class HealthServer:
             if start == 0 and mid in self._audio_header_cache:
                 cached_data = self._audio_header_cache[mid]
                 if length <= len(cached_data):
+                    resp_headers = {
+                        "Content-Type": mime_type,
+                        "Accept-Ranges": "bytes",
+                        "Content-Range": f"bytes {start}-{end}/{total_size}",
+                        "Content-Length": str(length),
+                        "Cache-Control": "public, max-age=604800, immutable",
+                    }
+                    if download_filename:
+                        resp_headers["Content-Disposition"] = f'attachment; filename="{download_filename}"'
                     return web.Response(
                         body=cached_data[start:end + 1],
                         status=206,
-                        headers={
-                            "Content-Type": mime_type,
-                            "Accept-Ranges": "bytes",
-                            "Content-Range": f"bytes {start}-{end}/{total_size}",
-                            "Content-Length": str(length),
-                            "Cache-Control": "public, max-age=604800, immutable",
-                        },
+                        headers=resp_headers,
                     )
 
             response = web.StreamResponse(status=206, reason="Partial Content")
@@ -530,6 +590,9 @@ class HealthServer:
             response.headers["Content-Range"] = f"bytes {start}-{end}/{total_size}"
             response.headers["Content-Length"] = str(length)
             response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            if download_filename:
+                response.headers["Content-Disposition"] = f'attachment; filename="{download_filename}"'
             await response.prepare(request)
 
             # Check if we can serve initial bytes from header cache
@@ -617,6 +680,9 @@ class HealthServer:
             response.headers["Accept-Ranges"] = "bytes"
             response.headers["Content-Length"] = str(total_size)
             response.headers["Cache-Control"] = "public, max-age=86400"
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            if download_filename:
+                response.headers["Content-Disposition"] = f'attachment; filename="{download_filename}"'
             await response.prepare(request)
 
             accumulated_header = []
