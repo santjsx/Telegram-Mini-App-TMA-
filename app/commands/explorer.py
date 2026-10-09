@@ -49,18 +49,15 @@ class ExplorerCommandHandler:
         genres = stats.get("total_genres", 0)
 
         text = (
-            "╔══════════════════════════════════════════╗\n"
-            "   📁 ✦ **Music Cloud Explorer** ✦ 📁\n"
-            "╚══════════════════════════════════════════╝\n\n"
+            "📁 **Music Cloud Explorer** 🎧\n\n"
             "Browse your personal audio vault like a native file manager:\n\n"
-            f"• 💿 **Albums:** {albums:,} curated collections\n"
-            f"• 🎵 **All Songs:** {tracks:,} audio files\n"
-            f"• 🎤 **Artists:** {artists:,} performers\n"
-            f"• ⭐ **Favorites:** {favs:,} starred songs\n"
-            f"• 💎 **Lossless FLAC:** {lossless:,} studio masters\n"
-            f"• 🎸 **Genres & Tags:** {genres:,} styles\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "💡 *Select a folder below to explore:* "
+            f"- 💿 **Albums:** {albums:,} curated collections\n"
+            f"- 🎵 **All Songs:** {tracks:,} audio files\n"
+            f"- 🎤 **Artists:** {artists:,} performers\n"
+            f"- ⭐ **Favorites:** {favs:,} starred songs\n"
+            f"- 💎 **Lossless FLAC:** {lossless:,} studio masters\n"
+            f"- 🎸 **Genres & Tags:** {genres:,} styles\n\n"
+            "💡 *Select a folder below to explore:*"
         )
 
         buttons = [

@@ -61,12 +61,11 @@ class CommandRouter:
             return
         elif raw_text in {"🔍 Search Songs & Albums", "🔍 Search Music", "🔍 Search"}:
             text = (
-                "╔══════════════════════════════════╗\n"
-                "   🔍 ✦ 𝗦𝗘𝗔𝗥𝗖𝗛 𝗬𝗢𝗨𝗥 𝗟𝗜𝗕𝗥𝗔𝗥𝗬 ✦ 🔍\n"
-                "╚══════════════════════════════════╝\n\n"
-                "Type any song title, artist name, or album directly into chat for instant delivery!\n\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                "💡 **Instant Discovery Portals:**"
+                "🔎 **Search Your Music Library** 🎵\n\n"
+                "Looking for a specific song, artist, or album? You can find it instantly!\n\n"
+                "1️⃣ Send any song title or artist directly in this chat.\n"
+                "2️⃣ Get instant 1-tap playback and audio files.\n\n"
+                "Or explore curated collections using the portals below: 💡"
             )
             buttons = [
                 [
@@ -124,11 +123,9 @@ class CommandRouter:
             fav_count = self.status_handler.indexer.get_favorites_count()
             if fav_count == 0:
                 await message.reply(
-                    "╔══════════════════════════════════╗\n"
-                    "   ⭐ ✦ 𝗙𝗔𝗩𝗢𝗥𝗜𝗧𝗘 𝗧𝗥𝗔𝗖𝗞𝗦 ✦ ⭐\n"
-                    "╚══════════════════════════════════╝\n\n"
-                    "You don't have any songs starred as favorites yet.\n\n"
-                    "💡 *Add `#favorite` to any song caption in your storage channel to pin it here!*",
+                    "⭐ **Favorite Tracks** 🎧\n\n"
+                    "You haven't starred any songs as favorites yet.\n\n"
+                    "💡 *Tip: Add `#favorite` to any song caption in your storage channel to pin it here!*",
                     buttons=[[Button.inline("📚 Open Library", data=b"lib:overview")]],
                 )
             else:
@@ -200,7 +197,7 @@ class CommandRouter:
         elif command.startswith("/"):
             await message.reply(
                 "❓ **Unknown command.**\n\n"
-                "Type `/help` or use the touch keyboard below to view all available commands."
+                "Type `/help` or use the menu below to view all available commands. 💡"
             )
         else:
             # 3. Natural Language Search

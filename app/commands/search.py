@@ -59,14 +59,13 @@ class SearchCommandHandler:
 
         if not query:
             await message.reply(
-                "╔══════════════════════════════════╗\n"
-                "   🔍 ✦ 𝗜𝗡𝗦𝗧𝗔𝗡𝗧 𝗧𝗥𝗔𝗖𝗞 𝗦𝗘𝗔𝗥𝗖𝗛 ✦ 🔍\n"
-                "╚══════════════════════════════════╝\n\n"
-                "Please specify a song title, artist, album, or tag to search.\n\n"
-                "💡 **Search Syntax Examples:**\n"
-                "• `/search rock` — Search by genre or title keyword\n"
-                "• `/search album:Abbey Road` — Filter by album name\n"
-                "• `/search #favorite` — View your starred tracks"
+                "🔎 **Instant Music Search** 🎵\n\n"
+                "Search through your personal music sanctuary in seconds!\n\n"
+                "**Search Examples:**\n"
+                "- Song or artist: `/search blinding lights` or `/search coldplay`\n"
+                "- By album: `/search album:Abbey Road`\n"
+                "- By tag / genre: `/search #favorite` or `/search #rock`\n\n"
+                "💡 *You can also type any song title directly into this chat!*"
             )
             return
 
@@ -77,7 +76,7 @@ class SearchCommandHandler:
             await message.reply(
                 "🔍 **No Matching Tracks Found**\n\n"
                 f"No songs found matching: `{query}` in your library.\n\n"
-                "💡 *Try a broader search term or explore* `/albums` *and* `/songs`."
+                "💡 *Try a broader search term, or explore* `/albums` *and* `/songs`."
             )
             return
 

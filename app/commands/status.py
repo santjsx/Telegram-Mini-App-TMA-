@@ -79,16 +79,14 @@ class StatusCommandHandler:
         lossless = len(self.indexer.get_lossless_tracks())
 
         return (
-            "╔══════════════════════════════════════════╗\n"
-            "   📚 ✦ **Music Library Overview** ✦ 📚\n"
-            "╚══════════════════════════════════════════╝\n\n"
-            f"• 💿 **Albums:** {stats.get('total_albums', 0):,} curated collections\n"
-            f"• 🎵 **Total Songs:** {stats.get('total_tracks', 0):,} indexed tracks\n"
-            f"• ⭐ **Starred Tracks:** {stats.get('favorites', 0):,} favorites\n"
-            f"• 💎 **Lossless FLAC:** {lossless:,} studio masters\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🟢 **Cloud Status:** Online (`{index_state}`)\n"
-            "💡 *Select an option below to browse your library:* "
+            "📚 **Music Library Overview** 🎧\n\n"
+            "Your personal cloud music collection at a glance:\n\n"
+            f"- 💿 **Albums:** {stats.get('total_albums', 0):,} curated collections\n"
+            f"- 🎵 **Total Songs:** {stats.get('total_tracks', 0):,} indexed tracks\n"
+            f"- ⭐ **Starred Tracks:** {stats.get('favorites', 0):,} favorites\n"
+            f"- 💎 **Lossless Audio:** {lossless:,} studio FLAC masters\n\n"
+            f"🟢 **Cloud Status:** Online (`{index_state}`)\n\n"
+            "💡 *Tap an option below to browse your library:*"
         )
 
     def _format_status_text(self) -> str:
@@ -116,17 +114,15 @@ class StatusCommandHandler:
         host_display = "Render Cloud ☁️" if is_render else "Local Server 💻"
 
         return (
-            "╔══════════════════════════════════╗\n"
-            "   📊 ✦ **TPMC Status & Cloud Health** ✦ 📊\n"
-            "╚══════════════════════════════════╝\n\n"
-            f"• **Telegram:** {tg_status}\n"
-            f"• **Bot:** {bot_status}\n"
-            f"• **Index:** {index_display}\n"
-            f"• **Tracks:** {index_stats.get('total_tracks', 0):,} songs\n"
-            f"• **Active Job:** {job_display}\n"
-            f"• **Host:** {host_display}\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "✨ *All streaming pipelines operational!*"
+            "📊 **TPMC Status & Cloud Health** ⚡\n\n"
+            "Live system status and streaming metrics:\n\n"
+            f"- **Telegram:** {tg_status}\n"
+            f"- **Bot:** {bot_status}\n"
+            f"- **Index:** {index_display}\n"
+            f"- **Tracks:** {index_stats.get('total_tracks', 0):,} songs\n"
+            f"- **Active Job:** {job_display}\n"
+            f"- **Host:** {host_display}\n\n"
+            "All streaming pipelines operational! ✨"
         )
 
     def format_albums_view(

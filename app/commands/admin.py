@@ -45,13 +45,10 @@ class AdminCommandHandler:
 
         if not is_confirmed:
             await message.reply(
-                "╔══════════════════════════════════╗\n"
-                "   ⚠️ ✦ **Re-index Confirmation Required** ✦ ⚠️\n"
-                "╚══════════════════════════════════╝\n\n"
+                "⚠️ **Re-index Confirmation Required** 🔄\n\n"
                 "This action will rescan your private Telegram channel and rebuild your music cloud metadata index from scratch.\n\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 "To confirm and begin, send:\n"
-                "`/reindex confirm`"
+                "`/reindex confirm` ⚡"
             )
             return
 
@@ -61,10 +58,8 @@ class AdminCommandHandler:
             reset=True,
         )
         await message.reply(
-            "╔══════════════════════════════════╗\n"
-            "   🔄 ✦ **Full Library Re-index Started** ✦ 🔄\n"
-            "╚══════════════════════════════════╝\n\n"
-            "✨ The channel catalog scan is now actively running in the background!\n\n"
+            "🔄 **Full Library Re-index Started!** 🚀\n\n"
+            "The channel catalog scan is now actively running in the background!\n\n"
             "📊 *Track live progress anytime using* `/status`"
         )
 
@@ -80,13 +75,10 @@ class AdminCommandHandler:
         total_members = len(approved) + 1
 
         lines = [
-            "╔══════════════════════════════════════════╗",
-            f"   👥 ✦ **Access Control & Users** ✦ 👥 ({total_members} Members)",
-            "╚══════════════════════════════════════════╝\n",
+            f"👥 **Access Control & Users** 🛡️ ({total_members} Members)\n",
             "👑 **Owner & Super Admin:**",
-            f"• **Curator:** {admin_name}",
-            f"• **Telegram ID:** `{self.config.authorized_user_id}`\n",
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n",
+            f"- **Curator:** {admin_name}",
+            f"- **Telegram ID:** `{self.config.authorized_user_id}`\n",
         ]
 
         buttons = []
@@ -146,9 +138,7 @@ class AdminCommandHandler:
                 try:
                     await self.bot_manager.send_message(
                         target_id,
-                        "╔══════════════════════════════════╗\n"
-                        "   🔒 ✦ **Access Revoked** ✦ 🔒\n"
-                        "╚══════════════════════════════════╝\n\n"
+                        "🔒 **Access Revoked** 🚫\n\n"
                         f"Your VIP access to **My Music Cloud** has been revoked by **{admin_name}**.\n\n"
                         f"If you believe this was done in error, please contact {admin_name} directly."
                     )
@@ -168,33 +158,30 @@ class AdminCommandHandler:
 
         if self.access_manager.is_pending(sender_id):
             await message.reply(
-                "╔══════════════════════════════════╗\n"
-                "   ⏳ ✦ **Access Request Pending** ✦ ⏳\n"
-                "╚══════════════════════════════════╝\n\n"
+                "⏳ **Access Request Pending** 🕒\n\n"
                 f"Your VIP access request has already been submitted to **{admin_name}** and is currently awaiting review.\n\n"
                 "📋 **Status:** `Pending Verification ⏳`\n"
                 "🔔 **Notification:** You will automatically receive a message here the moment your access pass is approved!\n\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                "🎧 *Thank you for your patience! Exceptional music is on the way.* ✨"
+                "Thank you for your patience! Exceptional music is on the way. ✨"
             )
             return
 
         buttons = [[Button.inline("✨ Request VIP Access 🎟️", data=b"req:access")]]
         await message.reply(
-            "╔══════════════════════════════════╗\n"
-            "   🎧 ✦ **Private Music Cloud** ✦ 🎧\n"
-            "      Private VIP Audio Sanctuary\n"
-            "╚══════════════════════════════════╝\n\n"
+            "🎧 **Welcome to My Music Cloud!** 🚀\n"
+            "Private VIP Audio Sanctuary\n\n"
             f"Greetings! You have arrived at an exclusive, private high-fidelity music streaming cloud curated by **{admin_name}**.\n\n"
-            "🔒 **Access Policy:** `Restricted • Invite-Only`\n"
+            "🔒 **Access Policy:** `Private Music Cloud • Invite-Only`\n"
             f"👑 **Curator & Admin:** {admin_name}\n\n"
             "✨ **Inside the Cloud:**\n"
-            "◈ **Lossless Streaming:** Studio-grade FLAC & 320kbps MP3s\n"
-            "◈ **Luxury Web Player:** 32-band reactive visualizer & vinyl deck\n"
-            "◈ **Instant Telegram Delivery:** 1-tap download straight to this chat\n"
-            "◈ **Smart Search:** Fuzzy query by song, artist, album, or genre\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "To unlock your private listening pass, tap below to submit an access request.",
+            "- 💎 **Lossless Streaming:** Studio-grade FLAC & 320kbps MP3s\n"
+            "- 🚀 **Web Player Mini App:** 32-band reactive visualizer & vinyl deck\n"
+            "- 📥 **Instant Telegram Delivery:** 1-tap download straight to this chat\n"
+            "- 🔎 **Smart Search:** Fuzzy query by song, artist, album, or genre\n\n"
+            "🔎 **How to join:**\n"
+            "1️⃣ Tap the button below to submit a VIP access request.\n"
+            "2️⃣ Once approved, you'll unlock the entire music sanctuary!\n\n"
+            "It's fast and simple! Tap below to request access: 💡",
             buttons=buttons,
         )
 
@@ -228,14 +215,11 @@ class AdminCommandHandler:
         )
 
         await event.edit(
-            "╔══════════════════════════════════╗\n"
-            "   ⏳ ✦ **Access Request Submitted** ✦ ⏳\n"
-            "╚══════════════════════════════════╝\n\n"
-            f"✨ Your VIP access application has been forwarded directly to **{admin_name}** for review!\n\n"
+            "⏳ **Access Request Submitted!** 🚀\n\n"
+            f"Your VIP access application has been forwarded directly to **{admin_name}** for review!\n\n"
             "📋 **Application Status:** `Pending Verification ⏳`\n"
             "🔔 **Notification:** You will receive a direct notification and welcome pack the moment your access is approved.\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "🎧 *Sit tight — exceptional music is worth waiting for!* ⚡"
+            "Sit tight — exceptional music is worth waiting for! ✨"
         )
         await event.answer("Request submitted successfully!")
 
@@ -245,14 +229,13 @@ class AdminCommandHandler:
             username_str = f"@{username}" if username else "*None*"
 
             admin_card = (
-                "🔔 ✦ 𝗡𝗘𝗪 𝗩𝗜𝗣 𝗔𝗖𝗖𝗘𝗦𝗦 𝗥𝗘𝗤𝗨𝗘𝗦𝗧 ✦ 🔔\n\n"
+                "🔔 **New VIP Access Request!** 🎟️\n\n"
                 "A listener is knocking on your music cloud doors!\n\n"
                 "👤 **User Details:**\n"
-                f"• **Name:** {full_name}\n"
-                f"• **Username:** {username_str}\n"
-                f"• **User ID:** `{sender_id}`\n"
-                "• **Status:** `Waiting for Approval ⏳`\n\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"- **Name:** {full_name}\n"
+                f"- **Username:** {username_str}\n"
+                f"- **User ID:** `{sender_id}`\n"
+                "- **Status:** `Waiting for Approval ⏳`\n\n"
                 "Grant this user access to search, stream, and download your cloud library?"
             )
             admin_buttons = [
@@ -298,11 +281,11 @@ class AdminCommandHandler:
             user = await self.access_manager.approve_user(target_id, approved_by=event.sender_id)
             if user:
                 await event.edit(
-                    "✨ ✦ **Access Granted** ✦ ✨\n\n"
-                    f"• **Member:** {user.display_name} ({user.mention})\n"
-                    f"• **User ID:** `{user.user_id}`\n"
-                    "• **Access Level:** `Authorized VIP Listener 🟢`\n"
-                    f"• **Approved by:** {admin_name}\n\n"
+                    "✨ **Access Granted!** 🎧\n\n"
+                    f"- **Member:** {user.display_name} ({user.mention})\n"
+                    f"- **User ID:** `{user.user_id}`\n"
+                    "- **Access Level:** `Authorized VIP Listener 🟢`\n"
+                    f"- **Approved by:** {admin_name}\n\n"
                     "🎉 *Onboarding welcome pack delivered to the listener!*",
                     buttons=[[Button.inline("🚫 Revoke Access", data=f"auth:rev:{user.user_id}".encode("utf-8"))]],
                 )
@@ -311,21 +294,19 @@ class AdminCommandHandler:
                 # Send welcome onboarding message to the approved user
                 if self.bot_manager:
                     welcome_msg = (
-                        "╔══════════════════════════════════════════╗\n"
-                        "   🎉 ✦ **Access Granted • Welcome to My Music Cloud** ✦ 🎉\n"
-                        "╚══════════════════════════════════════════╝\n\n"
-                        f"✨ **Access Approved by {admin_name}!**\n\n"
-                        "Your VIP listening pass is now officially active. You have full access to stream lossless audio, "
-                        "explore curated discographies, and download studio tracks directly inside Telegram!\n\n"
-                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                        "🚀 **Quick-Start Navigation:**\n"
-                        "◈ 🚀 **Web Player:** Tap `🎵 Web Player` below for live waveform visualizers & instant seeking!\n"
-                        "◈ 🔍 **Instant Search:** Type any track, artist, or album name directly in chat.\n"
-                        "◈ 💿 **Browse Albums:** Explore full collections with high-res cover art.\n"
-                        "◈ 📁 **File Explorer:** Drill down by genre, recent drops, or A-Z alphabet jump.\n"
-                        "◈ ⭐ **Starred Tracks:** Tap `⭐ Favorites` to listen to top curated songs.\n\n"
-                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                        "👇 *Tap any button below or send a song title to start listening!*"
+                        "🎉 **Access Granted • Welcome to My Music Cloud!** 🚀\n\n"
+                        f"Your VIP listening pass has been approved by **{admin_name}**!\n\n"
+                        "You now have full access to stream lossless audio, explore curated discographies, and download studio tracks directly inside Telegram.\n\n"
+                        "✨ **What you can do:**\n"
+                        "- 🚀 **Web Player:** Tap `🎵 Web Player` below for live waveform visualizers & instant seeking!\n"
+                        "- 🔎 **Instant Search:** Type any track, artist, or album name directly in chat.\n"
+                        "- 💿 **Browse Albums:** Explore full collections with high-res cover art.\n"
+                        "- 📁 **File Explorer:** Drill down by genre, recent drops, or A-Z alphabet jump.\n"
+                        "- ⭐ **Starred Tracks:** Tap `⭐ Favorites` to listen to top curated songs.\n\n"
+                        "🔎 **How to start:**\n"
+                        "1️⃣ Type any song title or artist directly in this chat.\n"
+                        "2️⃣ Or tap any button below to launch the experience!\n\n"
+                        "It's fast, simple, and lossless! Enjoy the music. 💡"
                     )
                     try:
                         await self.bot_manager.send_message(
@@ -340,10 +321,10 @@ class AdminCommandHandler:
             # Deny Request
             req = await self.access_manager.deny_user(target_id)
             await event.edit(
-                "🚫 ✦ **Request Declined** ✦ 🚫\n\n"
-                f"• **User ID:** `{target_id}`\n"
-                f"• **Decision:** Rejected by {admin_name}\n"
-                "• **Status:** `Access Denied 🔴`",
+                "🚫 **Request Declined**\n\n"
+                f"- **User ID:** `{target_id}`\n"
+                f"- **Decision:** Rejected by {admin_name}\n"
+                "- **Status:** `Access Denied 🔴`",
                 buttons=[[Button.inline("✅ Change Mind & Approve 🎧", data=f"auth:app:{target_id}".encode("utf-8"))]],
             )
             await event.answer("Request denied.")
@@ -353,14 +334,11 @@ class AdminCommandHandler:
                 try:
                     await self.bot_manager.send_message(
                         target_id,
-                        "╔══════════════════════════════════╗\n"
-                        "   🔒 ✦ **Access Request Declined** ✦ 🔒\n"
-                        "╚══════════════════════════════════╝\n\n"
+                        "🔒 **Access Request Declined**\n\n"
                         "Thank you for your interest in **My Music Cloud**.\n\n"
                         f"At this time, your access request could not be approved by **{admin_name}**. "
                         "This private music cloud remains strictly limited to authorized personal contacts.\n\n"
-                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                        "*Thank you for understanding!* ✨"
+                        "Thank you for understanding! ✨"
                     )
                 except Exception as e:
                     logger.warning(f"Could not notify denied user {target_id}: {e}")
@@ -374,7 +352,7 @@ class AdminCommandHandler:
             success = await self.access_manager.revoke_user(target_id)
             if success:
                 await event.edit(
-                    "🚫 ✦ **Access Revoked** ✦ 🚫\n\n"
+                    "🚫 **Access Revoked**\n\n"
                     f"User `{target_id}` has been removed from authorized VIP members.",
                     buttons=[[Button.inline("✅ Re-Authorize User 🎧", data=f"auth:app:{target_id}".encode("utf-8"))]],
                 )
@@ -385,9 +363,7 @@ class AdminCommandHandler:
                     try:
                         await self.bot_manager.send_message(
                             target_id,
-                            "╔══════════════════════════════════╗\n"
-                            "   🔒 ✦ **Access Revoked** ✦ 🔒\n"
-                            "╚══════════════════════════════════╝\n\n"
+                            "🔒 **Access Revoked** 🚫\n\n"
                             f"Your VIP access to **My Music Cloud** has been revoked by **{admin_name}**.\n\n"
                             f"If you believe this was done in error, please contact {admin_name} directly."
                         )

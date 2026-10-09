@@ -36,14 +36,13 @@ class DownloadCommandHandler:
 
         if not query:
             await message.reply(
-                "╔══════════════════════════════════╗\n"
-                "   📥 ✦ 𝗕𝗔𝗧𝗖𝗛 𝗔𝗨𝗗𝗜𝗢 𝗗𝗘𝗟𝗜𝗩𝗘𝗥𝗬 ✦ 📥\n"
-                "╚══════════════════════════════════╝\n\n"
-                "Please specify tracks or a genre tag to deliver.\n\n"
-                "💡 **Examples:**\n"
-                "• `/download rock` — Deliver all matching songs\n"
-                "• `/download #artist:linkin_park` — Deliver artist discography\n"
-                "• `/download #favorite` — Deliver all starred favorites"
+                "📥 **Batch Audio Delivery** ⚡\n\n"
+                "Deliver multiple tracks or entire playlists directly to this chat!\n\n"
+                "**Examples:**\n"
+                "- `/download rock` — Deliver all matching songs\n"
+                "- `/download #artist:linkin_park` — Deliver artist discography\n"
+                "- `/download #favorite` — Deliver all starred favorites\n\n"
+                "💡 *Use* `/search <query>` *to preview tracks before downloading.*"
             )
             return
 
@@ -77,14 +76,11 @@ class DownloadCommandHandler:
 
         if not is_confirmed:
             await message.reply(
-                "╔══════════════════════════════════════════╗\n"
-                "   ⚠️ ✦ **Bulk Download Confirmation Required** ✦ ⚠️\n"
-                "╚══════════════════════════════════════════╝\n\n"
+                "⚠️ **Bulk Download Confirmation Required** 📥\n\n"
                 f"Your library currently contains **{count:,}** tracks.\n"
                 f"This operation will deliver **{count:,}** audio files directly to this chat.\n\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 "To confirm and begin, send:\n"
-                "`/download_all confirm`"
+                "`/download_all confirm` ⚡"
             )
             return
 

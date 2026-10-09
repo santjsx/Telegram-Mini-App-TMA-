@@ -56,15 +56,12 @@ class Job:
         status_name = self.status.value.title()
         status_badge = "🟢" if self.status == JobStatus.RUNNING else ("✅" if self.status == JobStatus.COMPLETED else "🛑")
         return (
-            "╔══════════════════════════════════╗\n"
-            f"   🚀 ✦ 𝗔𝗨𝗗𝗜𝗢 𝗗𝗘𝗟𝗜𝗩𝗘𝗥𝗬 ✦ 🚀 `[{self.id}]`\n"
-            "╚══════════════════════════════════╝\n\n"
+            f"🚀 **Audio Delivery in Progress** 📥 `[{self.id}]`\n\n"
             f"🎯 **Target:** `{self.query}`\n"
             f"📊 **Progress:** {self.completed + self.skipped + self.failed} / {self.total} ({self.progress_pct}%)\n"
             f"`[{self.progress_bar}]`\n\n"
-            f"• 📥 **Delivered:** {self.completed}\n"
-            f"• ⏭️ **Skipped (Cached):** {self.skipped}\n"
-            f"• ⚠️ **Failed:** {self.failed}\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"• **Status:** `{status_name}` {status_badge}"
+            f"- 📥 **Delivered:** {self.completed}\n"
+            f"- ⏭️ **Skipped (Cached):** {self.skipped}\n"
+            f"- ⚠️ **Failed:** {self.failed}\n\n"
+            f"**Status:** `{status_name}` {status_badge}"
         )
