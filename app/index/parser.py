@@ -256,19 +256,19 @@ def clean_display_title(raw_title: str) -> str:
 
 
 def get_audio_badge(track: Track) -> str:
-    """Return a premium quality badge based on mime type, filename, or size."""
+    """Return clean audio format label based on mime type, filename, or size."""
     filename_lower = (track.filename or "").lower()
     mime_lower = (track.mime_type or "").lower()
 
     if "flac" in mime_lower or filename_lower.endswith(".flac"):
-        return "💎 FLAC"
+        return "FLAC"
     if "wav" in mime_lower or filename_lower.endswith(".wav"):
-        return "💎 WAV"
+        return "WAV"
     if "m4a" in mime_lower or filename_lower.endswith(".m4a") or "mp4" in mime_lower or "aac" in mime_lower:
-        return "🎧 M4A"
+        return "M4A"
     if "opus" in mime_lower or filename_lower.endswith(".opus") or "ogg" in mime_lower:
-        return "🎧 Opus"
+        return "Opus"
     if "mp3" in mime_lower or "mpeg" in mime_lower or filename_lower.endswith(".mp3"):
-        return "🎵 MP3"
-    return "🎵 Audio"
+        return "MP3"
+    return "Audio"
 

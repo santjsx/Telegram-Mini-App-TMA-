@@ -102,14 +102,14 @@ def test_clean_display_title():
 
 def test_get_audio_badge():
     t_flac = Track(message_id=1, channel_id=-1, title="Hi", performer="Artist", mime_type="audio/flac")
-    assert get_audio_badge(t_flac) == "💎 FLAC"
+    assert get_audio_badge(t_flac) == "FLAC"
 
     t_m4a = Track(message_id=2, channel_id=-1, title="Hi", performer="Artist", mime_type="audio/mp4")
-    assert get_audio_badge(t_m4a) == "🎧 M4A"
+    assert get_audio_badge(t_m4a) == "M4A"
 
     t_mp3 = Track(message_id=3, channel_id=-1, title="Hi", performer="Artist", mime_type="audio/mpeg")
-    assert get_audio_badge(t_mp3) == "🎵 MP3"
+    assert get_audio_badge(t_mp3) == "MP3"
 
     t_wav = Track(message_id=4, channel_id=-1, title="Hi", performer="Artist", filename="song.wav")
-    assert get_audio_badge(t_wav) == "💎 WAV"
+    assert get_audio_badge(t_wav) == "WAV"
 

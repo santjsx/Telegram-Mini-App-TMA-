@@ -331,7 +331,7 @@ class ExplorerCommandHandler:
             badge = get_audio_badge(t)
 
             if performer and performer.lower() not in clean_title.lower():
-                display_str = f"{performer} – {clean_title}"
+                display_str = f"{clean_title} – {performer}"
             else:
                 display_str = clean_title
 
@@ -340,7 +340,8 @@ class ExplorerCommandHandler:
                 meta_parts.append(t.duration_formatted)
             if t.file_size_formatted:
                 meta_parts.append(t.file_size_formatted)
-            meta_parts.append(badge)
+            if badge:
+                meta_parts.append(badge)
 
             lines.append(f"{i}. {display_str}{fav} {' '.join(meta_parts)}")
 
@@ -389,7 +390,7 @@ class ExplorerCommandHandler:
             badge = get_audio_badge(t)
 
             if performer and performer.lower() not in clean_title.lower():
-                display_str = f"{performer} – {clean_title}"
+                display_str = f"{clean_title} – {performer}"
             else:
                 display_str = clean_title
 
@@ -398,7 +399,8 @@ class ExplorerCommandHandler:
                 meta_parts.append(t.duration_formatted)
             if t.file_size_formatted:
                 meta_parts.append(t.file_size_formatted)
-            meta_parts.append(badge)
+            if badge:
+                meta_parts.append(badge)
 
             lines.append(f"{i}. {display_str}{fav} {' '.join(meta_parts)}")
 

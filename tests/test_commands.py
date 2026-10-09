@@ -405,8 +405,8 @@ async def test_search_format_page_layout(test_setup):
 
     # Check badges and favorite
     assert "Dj Mahendar" in text
-    assert "🎵 MP3" in text
-    assert "💎 FLAC" in text
+    assert "MP3" in text
+    assert "FLAC" in text
     assert "⭐" in text  # Track 2 is favorite
 
     # Check button layout: numeric keypad and navigation row
@@ -499,7 +499,7 @@ async def test_callback_explorer_lossless(test_setup):
     edited_text = fake_event.edit.call_args[0][0]
     assert "Lossless Audio Collection" in edited_text
     assert "Clocks" in edited_text
-    assert "💎 FLAC" in edited_text
+    assert "FLAC" in edited_text
 
 
 @pytest.mark.asyncio
@@ -533,7 +533,7 @@ async def test_callback_audio_specs_and_toggle_favorite(test_setup):
     assert "Viva La Vida" in specs_text
     assert "Coldplay" in specs_text
     assert "8.1 MB" in specs_text or "8.5" in specs_text or "8." in specs_text
-    assert "🎵 MP3" in specs_text
+    assert "MP3" in specs_text
 
     # 2. Test 1-Tap Toggle Favorite callback (turn ON)
     fake_event_fav = MagicMock()
