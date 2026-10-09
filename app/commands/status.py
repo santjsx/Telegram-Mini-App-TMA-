@@ -156,7 +156,7 @@ class StatusCommandHandler:
         inline_buttons = []
         for album, _artist, count in page_albums:
             track_word = "track" if count == 1 else "tracks"
-            lines.append(f"💿 **{album}** · 🎵 {count} {track_word}\n")
+            lines.append(f"💿 **{album}** · 🎵 {count} {track_word}")
             display_label = f"💿 {album[:16]}"
             prefix = "s:p:1:album:"
             max_bytes = 64 - len(prefix.encode("utf-8"))
@@ -185,6 +185,17 @@ class StatusCommandHandler:
 
         btn_rows.append([Button.inline(back_label, data=back_action.encode("utf-8"))])
         return "\n".join(lines), btn_rows
+
+    async def get_albums_page_artwork(self, page: int = 1, page_size: int = 10) -> Optional[Path]:
+        all_albums = self.indexer.get_all_albums()
+        start_idx = (page - 1) * page_size
+        page_albums = [a[0] for a in all_albums[start_idx : start_idx + page_size]]
+        return await ArtworkManager.get_albums_page_artwork(
+            page_albums,
+            self.indexer,
+            user_client=self.user_client,
+            bot_client=self.bot_client,
+        )
 
     def format_artists_view(
         self,
@@ -445,7 +456,8 @@ class StatusCommandHandler:
                     page = 1
 
             text, buttons = self.format_albums_view(page=page)
-            await send_or_edit_artwork(event, text, buttons=buttons, artwork_path=None)
+            artwork_path = await self.get_albums_page_artwork(page=page)
+            await send_or_edit_artwork(event, text, buttons=buttons, artwork_path=artwork_path)
             await event.answer()
             return
 

@@ -404,7 +404,95 @@ class ArtworkManager:
                     pass
                 return p
 
-        return None
+    @classmethod
+    async def get_albums_page_artwork(
+        cls,
+        album_names: List[str],
+        indexer: MusicIndexer,
+        user_client: Any = None,
+        bot_client: Any = None,
+    ) -> Optional[Path]:
+        """
+        Produce or retrieve artwork for an albums directory page.
+        Collects artwork for up to 4 albums on the page.
+        - If multiple album artworks exist, creates a clean 2x2 collage using Pillow.
+        - If only 1 exists, returns that album's artwork.
+        - If none are cached yet, attempts active retrieval for the first album.
+        """
+        if not album_names or not indexer:
+            return None
+
+        found_arts: List[Path] = []
+        for alb in album_names:
+            p = cls.get_album_artwork(alb, indexer)
+            if p and p.exists() and p.stat().st_size > 0:
+                if p not in found_arts:
+                    found_arts.append(p)
+                    if len(found_arts) == 4:
+                        break
+
+        # If none cached on disk, try ensuring artwork from Telegram for the first album
+        if not found_arts and album_names:
+            first_alb = album_names[0]
+            p = await cls.ensure_album_artwork(
+                first_alb, indexer, user_client=user_client, bot_client=bot_client
+            )
+            if p and p.exists() and p.stat().st_size > 0:
+                found_arts.append(p)
+
+        if not found_arts:
+            return None
+
+        if len(found_arts) == 1:
+            return found_arts[0]
+
+        # 2 or more artworks found: create/reuse a 2x2 collage with Pillow
+        try:
+            from PIL import Image
+            import hashlib
+
+            collage_dir = cls.get_cache_dir() / "collages"
+            collage_dir.mkdir(parents=True, exist_ok=True)
+
+            key_str = "_".join(sorted(p.stem for p in found_arts))
+            key_hash = hashlib.md5(key_str.encode("utf-8")).hexdigest()[:12]
+            collage_file = collage_dir / f"collage_{key_hash}.jpg"
+
+            if collage_file.exists() and collage_file.stat().st_size > 0:
+                return collage_file
+
+            grid_size = 600
+            half = grid_size // 2
+            canvas = Image.new("RGB", (grid_size, grid_size), color=(18, 18, 24))
+
+            positions = [
+                (0, 0),
+                (half, 0),
+                (0, half),
+                (half, half),
+            ]
+
+            arts_to_tile = list(found_arts)
+            if len(arts_to_tile) == 2:
+                arts_to_tile = [found_arts[0], found_arts[1], found_arts[1], found_arts[0]]
+            elif len(arts_to_tile) == 3:
+                arts_to_tile.append(found_arts[0])
+
+            for idx in range(min(4, len(arts_to_tile))):
+                src_path = arts_to_tile[idx]
+                try:
+                    with Image.open(src_path) as im:
+                        im_rgb = im.convert("RGB")
+                        im_resized = im_rgb.resize((half, half), Image.Resampling.LANCZOS)
+                        canvas.paste(im_resized, positions[idx])
+                except Exception as e:
+                    logger.debug(f"Failed to paste {src_path} into collage: {e}")
+
+            canvas.save(collage_file, "JPEG", quality=88)
+            return collage_file
+        except Exception as e:
+            logger.debug(f"Collage generation exception, using first artwork: {e}")
+            return found_arts[0]
 
     @classmethod
     async def precache_library_artworks(

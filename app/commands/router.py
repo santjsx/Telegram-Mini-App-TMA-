@@ -15,6 +15,7 @@ from app.commands.search import SearchCommandHandler
 from app.commands.download import DownloadCommandHandler
 from app.commands.admin import AdminCommandHandler
 from app.auth.manager import AccessManager
+from app.telegram.artwork import send_or_edit_artwork
 
 if TYPE_CHECKING:
     from app.commands.explorer import ExplorerCommandHandler
@@ -96,7 +97,8 @@ class CommandRouter:
                 await message.reply("💿 No albums indexed in your library yet.")
             else:
                 text, buttons = self.status_handler.format_albums_view(page=1, back_label="🔙 Open Library")
-                await message.reply(text, buttons=buttons)
+                artwork_path = await self.status_handler.get_albums_page_artwork(page=1)
+                await send_or_edit_artwork(message, text, buttons=buttons, artwork_path=artwork_path)
             return
         elif raw_text in {"🎵 All Songs", "🎵 Songs"} or command in {"/songs"}:
             message.text = "/search all"

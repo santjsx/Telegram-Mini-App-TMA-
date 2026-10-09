@@ -787,6 +787,10 @@ async def test_artwork_manager_and_delivery(tmp_path):
         ensured_track = await ArtworkManager.ensure_track_artwork(track2, indexer=indexer)
         assert ensured_track == dummy_art
 
+        # Test get_albums_page_artwork
+        page_art = await ArtworkManager.get_albums_page_artwork(["Great Album"], indexer)
+        assert page_art == dummy_art
+
         # Test precache_library_artworks
         cached_count = await ArtworkManager.precache_library_artworks(indexer)
         assert cached_count == 0  # Already cached

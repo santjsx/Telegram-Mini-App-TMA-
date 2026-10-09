@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import TYPE_CHECKING, Optional
+from pathlib import Path
+from typing import TYPE_CHECKING, Optional, Any
 from telethon import Button, events
 from telethon.tl.custom.message import Message
 
 from app.index.parser import clean_display_title, get_audio_badge
+from app.index.artwork import ArtworkManager
+from app.telegram.artwork import send_or_edit_artwork
 
 if TYPE_CHECKING:
     from app.index.indexer import MusicIndexer
@@ -35,6 +38,33 @@ class ExplorerCommandHandler:
         self.indexer = indexer
         self.job_manager = job_manager
         self.search_handler = search_handler
+
+    @property
+    def user_client(self) -> Any:
+        if hasattr(self.job_manager, "delivery_engine"):
+            return getattr(self.job_manager.delivery_engine, "user_client", None)
+        return None
+
+    @property
+    def bot_client(self) -> Any:
+        if hasattr(self.job_manager, "delivery_engine"):
+            bm = getattr(self.job_manager.delivery_engine, "bot_manager", None)
+            if bm and hasattr(bm, "client"):
+                return bm.client
+        return None
+
+    async def get_albums_page_artwork(
+        self, page: int = 1, letter: Optional[str] = None, page_size: int = 8
+    ) -> Optional[Path]:
+        albums = self.indexer.get_albums_by_letter(letter) if letter else self.indexer.get_all_albums()
+        start_idx = (page - 1) * page_size
+        page_albums = [a[0] for a in albums[start_idx : start_idx + page_size]]
+        return await ArtworkManager.get_albums_page_artwork(
+            page_albums,
+            self.indexer,
+            user_client=self.user_client,
+            bot_client=self.bot_client,
+        )
 
     # ---------------------------------------------------------
     # Root File Manager Screen
@@ -455,7 +485,8 @@ class ExplorerCommandHandler:
             page = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 1
             letter = parts[3] if len(parts) > 3 else None
             text, buttons = self.format_albums_explorer(page=page, letter=letter)
-            await event.edit(text, buttons=buttons)
+            artwork_path = await self.get_albums_page_artwork(page=page, letter=letter)
+            await send_or_edit_artwork(event, text, buttons=buttons, artwork_path=artwork_path)
             await event.answer()
             return
 

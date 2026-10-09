@@ -6,3 +6,4 @@ rapidfuzz>=3.14.0
 cryptg>=0.6.0
 pytest>=8.0.0
 pytest-asyncio>=0.23.0
+pillow>=10.0.0
