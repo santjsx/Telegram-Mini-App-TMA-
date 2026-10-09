@@ -316,43 +316,58 @@ class ExplorerCommandHandler:
                 [[Button.inline("🔙 Back to Explorer", data=b"exp:root")]],
             )
 
+        limit_tracks = tracks[:8]
+        count_str = f"1–{len(limit_tracks)} of {len(tracks)}" if len(tracks) > 1 else "1 of 1"
         lines = [
-            "💎 **Lossless Audio Collection (FLAC / WAV)**\n"
-            f"Found **{len(tracks)}** studio-quality lossless tracks:\n",
+            f"💎 **Lossless Audio Collection (FLAC / WAV)** · Results {count_str}\n",
         ]
         buttons: list[list[Button]] = []
         track_btns: list[Button] = []
 
-        for i, t in enumerate(tracks[:6], start=1):
+        for i, t in enumerate(limit_tracks, start=1):
+            fav = " ⭐" if t.is_favorite else ""
             clean_title = clean_display_title(t.title or t.display_title)
+            performer = t.performer if t.performer and t.performer != "Unknown Artist" else ""
             badge = get_audio_badge(t)
-            lines.append(f"🎧 **{i:02d}. {clean_title}**\n    👤 *{t.performer}* · 💾 {t.file_size_formatted} · {badge}\n")
+
+            if performer and performer.lower() not in clean_title.lower():
+                display_str = f"{performer} – {clean_title}"
+            else:
+                display_str = clean_title
+
+            meta_parts = []
+            if t.duration_formatted:
+                meta_parts.append(t.duration_formatted)
+            if t.file_size_formatted:
+                meta_parts.append(t.file_size_formatted)
+            meta_parts.append(badge)
+
+            lines.append(f"{i}. {display_str}{fav} {' '.join(meta_parts)}")
 
             track_btns.append(
-                Button.inline(f"📥 {i}. {clean_title[:14]}", data=f"s:one:{t.message_id}".encode("utf-8"))
+                Button.inline(f"{i}", data=f"s:one:{t.message_id}".encode("utf-8"))
             )
-            if len(track_btns) == 2:
+            if len(track_btns) == 4:
                 buttons.append(track_btns)
                 track_btns = []
 
         if track_btns:
             buttons.append(track_btns)
 
-        if len(tracks) > 6:
-            buttons.append([
-                Button.inline("🔍 Search All Lossless", data=b"s:p:1:flac")
-            ])
-
-        buttons.append([
+        bottom_row: list[Button] = [
             Button.inline("📁 Root Explorer", data=b"exp:root")
-        ])
+        ]
+        if len(tracks) > 8:
+            bottom_row.insert(0, Button.inline("🔍 All Lossless", data=b"s:p:1:flac"))
+        buttons.append(bottom_row)
+
         return "\n".join(lines), buttons
 
     # ---------------------------------------------------------
     # Recently Added Tracks
     # ---------------------------------------------------------
     def format_recent_view(self) -> tuple[str, list[list[Button]]]:
-        tracks = self.indexer.get_recent_tracks(limit=6)
+        tracks = self.indexer.get_recent_tracks(limit=8)
         if not tracks:
             return (
                 "🆕 **Recently Added Tracks**\n\n"
@@ -360,22 +375,37 @@ class ExplorerCommandHandler:
                 [[Button.inline("🔙 Back to Explorer", data=b"exp:root")]],
             )
 
+        count_str = f"1–{len(tracks)} of {len(tracks)}" if len(tracks) > 1 else "1 of 1"
         lines = [
-            "🆕 **Recently Added Tracks**\n"
-            "Your freshest additions to the music cloud:\n",
+            f"🆕 **Recently Added Tracks** · Results {count_str}\n",
         ]
         buttons: list[list[Button]] = []
         track_btns: list[Button] = []
 
         for i, t in enumerate(tracks, start=1):
+            fav = " ⭐" if t.is_favorite else ""
             clean_title = clean_display_title(t.title or t.display_title)
+            performer = t.performer if t.performer and t.performer != "Unknown Artist" else ""
             badge = get_audio_badge(t)
-            lines.append(f"🎧 **{i:02d}. {clean_title}**\n    👤 *{t.performer}* · ⏱ {t.duration_formatted} · {badge}\n")
+
+            if performer and performer.lower() not in clean_title.lower():
+                display_str = f"{performer} – {clean_title}"
+            else:
+                display_str = clean_title
+
+            meta_parts = []
+            if t.duration_formatted:
+                meta_parts.append(t.duration_formatted)
+            if t.file_size_formatted:
+                meta_parts.append(t.file_size_formatted)
+            meta_parts.append(badge)
+
+            lines.append(f"{i}. {display_str}{fav} {' '.join(meta_parts)}")
 
             track_btns.append(
-                Button.inline(f"📥 {i}. {clean_title[:14]}", data=f"s:one:{t.message_id}".encode("utf-8"))
+                Button.inline(f"{i}", data=f"s:one:{t.message_id}".encode("utf-8"))
             )
-            if len(track_btns) == 2:
+            if len(track_btns) == 4:
                 buttons.append(track_btns)
                 track_btns = []
 

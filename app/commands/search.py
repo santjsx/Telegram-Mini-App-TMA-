@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-PAGE_SIZE = 6
+PAGE_SIZE = 8
 
 
 class SearchCommandHandler:
@@ -74,9 +74,12 @@ class SearchCommandHandler:
 
         if result.total_count == 0:
             await message.reply(
-                "🔍 **No Matching Tracks Found**\n\n"
-                f"No songs found matching: `{query}` in your library.\n\n"
-                "💡 *Try a broader search term, or explore* `/albums` *and* `/songs`."
+                f"No songs found matching: `{query}`",
+                buttons=[[
+                    Button.inline("⬅️", data=b"s:noop"),
+                    Button.inline("❌", data=b"s:close"),
+                    Button.inline("➡️", data=b"s:noop"),
+                ]],
             )
             return
 
@@ -103,6 +106,13 @@ class SearchCommandHandler:
 
         if data in {"s:noop", "s:p:noop"}:
             await event.answer()
+            return
+
+        if data == "s:close":
+            try:
+                await event.delete()
+            except Exception:
+                await event.answer("Closed.")
             return
 
         parts = data.split(":", 3)
@@ -278,131 +288,83 @@ class SearchCommandHandler:
         query_str = (result.query or "").strip()
         q_lower = query_str.lower()
         is_album_view = q_lower.startswith("album:")
+
+        start_num = (result.page - 1) * result.page_size + 1
+        end_num = min(start_num + len(result.tracks) - 1, result.total_count)
+
+        if result.total_count > 1:
+            count_str = f"{start_num}–{end_num} of {result.total_count}"
+        else:
+            count_str = "1 of 1"
+
         if is_album_view:
             album_name = query_str[6:].strip()
-            header = f"💿 **Album: {album_name}**"
-        elif q_lower in ("all", "#all", "songs", "all_songs", "all tracks"):
-            header = "🎵 **All Songs (A–Z)**"
+            header = f"💿 **Album: {album_name} · Results {count_str}**"
         elif q_lower.startswith("artist:"):
             artist_name = query_str[7:].strip()
-            header = f"🎤 **Artist: {artist_name}**"
+            header = f"🎤 **Artist: {artist_name} · Results {count_str}**"
         elif q_lower.startswith("genre:") or query_str.startswith("#"):
             tag_name = query_str.split(":", 1)[-1].lstrip("#").strip()
-            header = f"🎸 **Genre: #{tag_name}**"
+            header = f"🎸 **Genre: #{tag_name} · Results {count_str}**"
         elif q_lower in ("favorite", "#favorite"):
-            header = "⭐ **Favorite Tracks**"
+            header = f"⭐ **Favorites · Results {count_str}**"
+        elif q_lower in ("all", "#all", "songs", "all_songs", "all tracks"):
+            header = f"🎵 **All Songs (A–Z) · Results {count_str}**"
         else:
-            header = f"🔍 **Search Results for:** `{query_str}`"
+            header = f"Results {count_str}"
 
-        # Safe query length in callback (Telegram limit is 64 bytes for callback_data)
         safe_query = (result.query or "")[:35]
 
-        # If only 1 track matched, show a direct high-visibility download card
-        if result.total_count == 1:
-            only_track = result.tracks[0]
-            fav = " ⭐" if only_track.is_favorite else ""
-            clean_title = clean_display_title(only_track.title or only_track.display_title)
-            quality = get_audio_badge(only_track)
-
-            lines = [
-                f"{header}\nFound **1** track in your library:\n",
-                f"🎧 **{clean_title}**{fav}",
-            ]
-            if only_track.album and only_track.album != "Unknown Album":
-                lines.append(f"   💿 *{only_track.album}*")
-
-            specs = []
-            if only_track.duration_formatted:
-                specs.append(f"⏱ {only_track.duration_formatted}")
-            if only_track.file_size_formatted:
-                specs.append(f"💾 {only_track.file_size_formatted}")
-            specs.append(quality)
-            lines.append(f"   {' · '.join(specs)}\n")
-
-            fav_label = "⭐ Star Favorite" if not only_track.is_favorite else "⭐ Unstar"
-            buttons = [
-                [
-                    Button.inline(
-                        f"📥 Send Audio ({only_track.file_size_formatted})",
-                        data=f"s:one:{only_track.message_id}".encode("utf-8"),
-                    )
-                ],
-                [
-                    Button.inline(fav_label, data=f"s:fav:{only_track.message_id}:{safe_query}".encode("utf-8")),
-                    Button.inline("ℹ️ Audio Specs", data=f"s:info:{only_track.message_id}:{safe_query}".encode("utf-8")),
-                ],
-                [
-                    Button.inline("📚 Back to Library", data=b"lib:overview")
-                ],
-            ]
-            return "\n".join(lines), buttons
-
-        # Multi-track layout
         if basket_mask is not None:
             sel_count = bin(basket_mask).count("1")
             lines = [
-                f"{header} · **Selection Mode**",
-                f"Tap checkboxes to select songs ({sel_count} selected):\n",
+                f"{header} · Selection Mode ({sel_count} selected)\n",
             ]
         else:
             lines = [
-                header,
-                f"Found **{result.total_count}** tracks · Page **{result.page}** of **{result.total_pages}**\n",
+                f"{header}\n",
             ]
 
-        start_num = (result.page - 1) * result.page_size + 1
         track_buttons: list[Button] = []
         track_rows: list[list[Button]] = []
 
-        for i, t in enumerate(result.tracks, start=start_num):
+        for i, t in enumerate(result.tracks, start=1):
             fav = " ⭐" if t.is_favorite else ""
             raw_title = t.title or t.display_title
             clean_title = clean_display_title(raw_title)
             performer = t.performer if t.performer and t.performer != "Unknown Artist" else ""
-            album = t.album if t.album and t.album != "Unknown Album" else ""
             quality = get_audio_badge(t)
 
-            num_str = f"{i:02d}" if result.total_count >= 10 else f"{i}"
-            item_lines = [f"🎧 **{num_str}. {clean_title}**{fav}"]
+            if performer and performer.lower() not in clean_title.lower():
+                display_str = f"{performer} – {clean_title}"
+            else:
+                display_str = clean_title
 
-            if not is_album_view:
-                meta_details = []
-                if performer:
-                    meta_details.append(f"👤 *{performer}*")
-                if album and album.lower() != clean_title.lower():
-                    meta_details.append(f"💿 *{album}*")
-                if meta_details:
-                    item_lines.append(f"    {' · '.join(meta_details)}")
-
-            specs = []
+            meta_parts = []
             if t.duration_formatted:
-                specs.append(f"⏱ {t.duration_formatted}")
+                meta_parts.append(t.duration_formatted)
             if t.file_size_formatted:
-                specs.append(f"💾 {t.file_size_formatted}")
-            specs.append(quality)
-            item_lines.append(f"    {' · '.join(specs)}")
+                meta_parts.append(t.file_size_formatted)
+            meta_parts.append(quality)
 
-            lines.append("\n".join(item_lines) + "\n")
+            lines.append(f"{i}. {display_str}{fav} {' '.join(meta_parts)}")
 
-            # 2 buttons per row, showing number and clean title preview
-            short_btn_title = clean_title[:13].strip()
-            idx_in_page = i - start_num
-
+            idx_in_page = i - 1
             if basket_mask is not None:
                 is_selected = bool(basket_mask & (1 << idx_in_page))
                 box = "☑️" if is_selected else "⬜"
                 track_buttons.append(
                     Button.inline(
-                        f"{box} {i}. {short_btn_title}",
+                        f"{box} {i}.",
                         data=f"s:b:{result.page}:{basket_mask}:{idx_in_page + 1}:{safe_query}".encode("utf-8"),
                     )
                 )
             else:
                 track_buttons.append(
-                    Button.inline(f"📥 {i}. {short_btn_title}", data=f"s:one:{t.message_id}".encode("utf-8"))
+                    Button.inline(f"{i}", data=f"s:one:{t.message_id}".encode("utf-8"))
                 )
 
-            if len(track_buttons) == 2:
+            if len(track_buttons) == 4:
                 track_rows.append(track_buttons)
                 track_buttons = []
 
@@ -413,45 +375,26 @@ class SearchCommandHandler:
         buttons.extend(track_rows)
 
         if basket_mask is None:
-            nav_row: list[Button] = []
-            if result.has_prev_page:
-                nav_row.append(
-                    Button.inline("◀️ Prev", data=f"s:p:{result.page - 1}:{safe_query}".encode("utf-8"))
-                )
-            if result.total_pages > 1:
-                nav_row.append(
-                    Button.inline(f"📄 {result.page} / {result.total_pages}", data=b"s:noop")
-                )
-            if result.has_next_page:
-                nav_row.append(
-                    Button.inline("Next ▶️", data=f"s:p:{result.page + 1}:{safe_query}".encode("utf-8"))
-                )
-
-            if nav_row:
-                buttons.append(nav_row)
-
-            # Action rows: Download Page, Select Tracks, Library
-            buttons.append([
-                Button.inline(
-                    f"⚡ Download Page ({len(result.tracks)})",
-                    data=f"s:dl:{result.page}:{safe_query}".encode("utf-8"),
-                ),
-                Button.inline(
-                    "🧺 Select Tracks",
-                    data=f"s:b:{result.page}:0:0:{safe_query}".encode("utf-8"),
-                ),
-            ])
-            buttons.append([
-                Button.inline("📚 Library", data=b"lib:overview"),
-            ])
+            prev_btn = (
+                Button.inline("⬅️", data=f"s:p:{result.page - 1}:{safe_query}".encode("utf-8"))
+                if result.has_prev_page
+                else Button.inline("⬅️", data=b"s:noop")
+            )
+            close_btn = Button.inline("❌", data=b"s:close")
+            next_btn = (
+                Button.inline("➡️", data=f"s:p:{result.page + 1}:{safe_query}".encode("utf-8"))
+                if result.has_next_page
+                else Button.inline("➡️", data=b"s:noop")
+            )
+            buttons.append([prev_btn, close_btn, next_btn])
         else:
             sel_count = bin(basket_mask).count("1")
             buttons.append([
                 Button.inline(
-                    f"📥 Download Selected ({sel_count})",
+                    f"📥 Download ({sel_count})",
                     data=f"s:bdl:{result.page}:{basket_mask}:{safe_query}".encode("utf-8"),
                 ),
-                Button.inline("✖️ Cancel Selection", data=f"s:p:{result.page}:{safe_query}".encode("utf-8")),
+                Button.inline("❌ Cancel", data=f"s:p:{result.page}:{safe_query}".encode("utf-8")),
             ])
 
         return "\n".join(lines), buttons

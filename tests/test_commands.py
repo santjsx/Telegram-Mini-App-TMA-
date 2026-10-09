@@ -403,20 +403,19 @@ async def test_search_format_page_layout(test_setup):
     assert "Annochadu Song" in text
     assert "01 - Annochadu" not in text
 
-    # Check emojis and badges
-    assert "🎧" in text
-    assert "👤 *Dj Mahendar*" in text
+    # Check badges and favorite
+    assert "Dj Mahendar" in text
     assert "🎵 MP3" in text
     assert "💎 FLAC" in text
     assert "⭐" in text  # Track 2 is favorite
 
-    # Check button layout: 2 per row
-    # Row 0: 2 track buttons
+    # Check button layout: numeric keypad and navigation row
     assert len(buttons[0]) == 2
-    btn1_text = buttons[0][0].text
-    btn2_text = buttons[0][1].text
-    assert "📥 1. RAYALASEEMA" in btn1_text
-    assert "📥 2. Annochadu" in btn2_text
+    assert buttons[0][0].text == "1"
+    assert buttons[0][1].text == "2"
+    assert buttons[1][0].text == "⬅️"
+    assert buttons[1][1].text == "❌"
+    assert buttons[1][2].text == "➡️"
 
 
 @pytest.mark.asyncio
